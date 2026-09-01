@@ -1,0 +1,5 @@
+retropolymorph.selector.tooltip=Recipe choices: %s
+retropolymorph.selector.selected=Selected
+retropolymorph.selector.rejected=Server rejected the last selection
+retropolymorph.selector.reset=Right-click to return to the default recipe
+retropolymorph.selector.page=%s/%s

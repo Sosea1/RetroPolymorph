@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "dev.sosea1.retropolymorph.mixin.compat.jei",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "mixins.retropolymorph.refmap.json",
+  "client": [
+    "JeiRecipeTransferMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

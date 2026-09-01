@@ -1,0 +1,5 @@
+retropolymorph.selector.tooltip=Варианты рецепта: %s
+retropolymorph.selector.selected=Выбрано
+retropolymorph.selector.rejected=Сервер отклонил последний выбор
+retropolymorph.selector.reset=ПКМ — вернуться к рецепту по умолчанию
+retropolymorph.selector.page=%s/%s

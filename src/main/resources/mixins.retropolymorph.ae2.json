@@ -1,0 +1,20 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "dev.sosea1.retropolymorph.mixin.compat.ae2",
+  "refmap": "mixins.retropolymorph.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "Ae2CraftingTermMixin",
+    "Ae2CraftingMatrixSlotMixin",
+    "Ae2CraftingResultSlotMixin",
+    "Ae2PatternTermMixin",
+    "Ae2PatternCraftingSlotMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
