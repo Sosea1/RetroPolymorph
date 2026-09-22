@@ -2,8 +2,14 @@
 
 Retro Polymorph is an unofficial Minecraft 1.12.2 port of
 [Polymorph](https://github.com/illusivesoulworks/polymorph) by Illusive Soulworks.
-It resolves recipe conflicts when several recipes accept the same inputs and
-lets the player choose which recipe should be used.
+It resolves recipe conflicts when multiple recipes accept the same inputs,
+letting every valid result coexist instead of forcing a modpack to remove or
+rewrite recipes.
+
+In a large modpack, conflicting recipes are common: the same ingredients may
+produce different items from different mods. Retro Polymorph lets the player
+choose the intended result and remembers that choice for the next time the
+same conflict appears.
 
 ## Requirements
 
@@ -13,10 +19,36 @@ lets the player choose which recipe should be used.
 
 ## Features
 
+### Crafting conflicts
+
+When the current crafting grid matches more than one recipe, a small selector
+appears beside the output slot. It only appears for an actual conflict, so
+ordinary recipes keep the normal Minecraft experience.
+
+![A recipe conflict adds a selector beside the crafting output.](docs/media/crafting-conflict-detection.gif)
+
+Open the selector to see every available output, then click the result you
+want. The crafting output changes immediately.
+
+![Selecting a different crafting result from the selector.](docs/media/crafting-choose-result.gif)
+
+Your chosen result is remembered. Remove and place the same ingredients again,
+and Retro Polymorph restores the previous result automatically.
+
+![A remembered crafting choice is restored for the same ingredients.](docs/media/crafting-remembered-choice.gif)
+
+### Smelting conflicts
+
+Furnaces receive the same recipe-selection UI when one input can produce more
+than one valid output. Choose the material you need before collecting the
+result.
+
+![Selecting an alternative furnace result.](docs/media/smelting-choose-result.gif)
+
+### More features
+
 - Server-authoritative recipe selection.
-- Persistent player preferences for normal crafting conflicts.
 - Compact and classic selector layouts with mouse, wheel and keyboard control.
-- Crafting and furnace conflict handling.
 - JEI / HEI recipe-transfer integration.
 - Optional FastSuite acceleration with a safe Forge-registry fallback.
 - Ordered modpack policy for preferred mods and exact recipes.

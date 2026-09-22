@@ -62,10 +62,37 @@ public final class RecipeProbeTest {
         assertEquals(0, RecipeProbe.getFailureCount());
     }
 
+    @Test
+    public void oversizedMatrixRemaindersPreserveOriginalInventoryLayout() {
+        InventoryCrafting matrix = new OversizedMatrix(new DummyContainer(), 3, 3);
+        NonNullList<ItemStack> validList = NonNullList.withSize(9, ItemStack.EMPTY);
+        IRecipe validRecipe = new DummyRecipe(validList);
+
+        NonNullList<ItemStack> remainders = RecipeProbe.remainingItems(validRecipe, matrix);
+
+        assertEquals(10, remainders.size());
+        assertTrue(remainders.get(9).isEmpty());
+        assertEquals(0, RecipeProbe.getFailureCount());
+    }
+
     private static final class DummyContainer extends Container {
         @Override
         public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer playerIn) {
             return true;
+        }
+    }
+
+    private static final class OversizedMatrix extends InventoryCrafting {
+        private final int customSize;
+
+        private OversizedMatrix(Container eventHandler, int width, int height) {
+            super(eventHandler, width, height);
+            this.customSize = width * height + 1;
+        }
+
+        @Override
+        public int getSizeInventory() {
+            return this.customSize;
         }
     }
 

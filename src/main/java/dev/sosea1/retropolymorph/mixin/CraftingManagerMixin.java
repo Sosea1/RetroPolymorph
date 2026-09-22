@@ -12,7 +12,6 @@ import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,14 +34,10 @@ public abstract class CraftingManagerMixin {
             return;
         }
 
-        if (matrix != null && matrix.getSizeInventory() > matrix.getWidth() * matrix.getHeight()) {
+        if (retropolymorph$hasHiddenSlots(matrix)) {
             InventoryCrafting clean = RecipeProbe.sanitizeMatrix(matrix);
-            for (IRecipe recipe : ForgeRegistries.RECIPES) {
-                if (recipe != null && RecipeProbe.matches(recipe, clean, world)) {
-                    cir.setReturnValue(recipe);
-                    return;
-                }
-            }
+            cir.setReturnValue(CraftingManager.findMatchingRecipe(clean, world));
+            return;
         }
     }
 
@@ -58,13 +53,9 @@ public abstract class CraftingManagerMixin {
             return;
         }
 
-        if (matrix != null && matrix.getSizeInventory() > matrix.getWidth() * matrix.getHeight()) {
-            for (IRecipe recipe : ForgeRegistries.RECIPES) {
-                if (recipe != null && RecipeProbe.matches(recipe, clean, world)) {
-                    cir.setReturnValue(RecipeProbe.craftingResult(recipe, clean));
-                    return;
-                }
-            }
+        if (retropolymorph$hasHiddenSlots(matrix)) {
+            cir.setReturnValue(CraftingManager.findMatchingResult(clean, world));
+            return;
         }
     }
 
@@ -76,17 +67,14 @@ public abstract class CraftingManagerMixin {
         InventoryCrafting clean = RecipeProbe.sanitizeMatrix(matrix);
         IRecipe selected = retropolymorph$getSelected(matrix, world);
         if (selected != null) {
-            cir.setReturnValue(RecipeProbe.remainingItems(selected, clean));
+            cir.setReturnValue(RecipeProbe.remainingItems(selected, matrix));
             return;
         }
 
-        if (matrix != null && matrix.getSizeInventory() > matrix.getWidth() * matrix.getHeight()) {
-            for (IRecipe recipe : ForgeRegistries.RECIPES) {
-                if (recipe != null && RecipeProbe.matches(recipe, clean, world)) {
-                    cir.setReturnValue(RecipeProbe.remainingItems(recipe, clean));
-                    return;
-                }
-            }
+        if (retropolymorph$hasHiddenSlots(matrix)) {
+            NonNullList<ItemStack> cleanRemainders = CraftingManager.getRemainingItems(clean, world);
+            cir.setReturnValue(RecipeProbe.expandRemainders(matrix, cleanRemainders));
+            return;
         }
     }
 
@@ -143,5 +131,11 @@ public abstract class CraftingManagerMixin {
             state.select(selected);
         }
         return state;
+    }
+
+    @Unique
+    private static boolean retropolymorph$hasHiddenSlots(@Nullable InventoryCrafting matrix) {
+        return matrix != null && !(matrix instanceof dev.sosea1.retropolymorph.core.SanitizedCraftingMatrix)
+                && matrix.getSizeInventory() > matrix.getWidth() * matrix.getHeight();
     }
 }

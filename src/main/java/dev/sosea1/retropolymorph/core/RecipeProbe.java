@@ -79,31 +79,59 @@ public final class RecipeProbe {
             return NonNullList.create();
         }
         InventoryCrafting clean = sanitizeMatrix(matrix);
-        int size = clean.getSizeInventory();
+        int cleanSize = clean.getSizeInventory();
+        int originalSize = matrix.getSizeInventory();
         if (recipe == null) {
-            return NonNullList.withSize(size, ItemStack.EMPTY);
+            return NonNullList.withSize(originalSize, ItemStack.EMPTY);
         }
         try {
             NonNullList<ItemStack> remainders = recipe.getRemainingItems(clean);
-            if (remainders == null || remainders.size() != size) {
+            if (remainders == null || remainders.size() != cleanSize) {
                 if (remainders != null) {
-                    reportRemainderSizeMismatch(recipe, remainders.size(), size);
+                    reportRemainderSizeMismatch(recipe, remainders.size(), cleanSize);
                 }
-                return NonNullList.withSize(size, ItemStack.EMPTY);
+                return NonNullList.withSize(originalSize, ItemStack.EMPTY);
             }
-            return remainders;
+            return expandRemainders(matrix, remainders);
         } catch (RuntimeException | LinkageError exception) {
             reportRemainderFailure(recipe, exception);
             try {
                 NonNullList<ItemStack> forgeDefault = ForgeHooks.defaultRecipeGetRemainingItems(clean);
-                if (forgeDefault != null && forgeDefault.size() == size) {
-                    return forgeDefault;
+                if (forgeDefault != null && forgeDefault.size() == cleanSize) {
+                    return expandRemainders(matrix, forgeDefault);
                 }
             } catch (RuntimeException | LinkageError ignored) {
                 // Ignore secondary fallback failure
             }
-            return NonNullList.withSize(size, ItemStack.EMPTY);
+            return NonNullList.withSize(originalSize, ItemStack.EMPTY);
         }
+    }
+
+    /**
+     * Restores a clean recipe remainder list to the layout expected by the
+     * caller. Extra slots in modular crafting wrappers are never recipe inputs
+     * and must receive an empty remainder.
+     */
+    public static NonNullList<ItemStack> expandRemainders(
+            InventoryCrafting matrix,
+            @Nullable NonNullList<ItemStack> cleanRemainders) {
+        if (matrix == null) {
+            return NonNullList.create();
+        }
+
+        InventoryCrafting clean = sanitizeMatrix(matrix);
+        int cleanSize = clean.getSizeInventory();
+        int originalSize = matrix.getSizeInventory();
+        NonNullList<ItemStack> expanded = NonNullList.withSize(originalSize, ItemStack.EMPTY);
+        if (cleanRemainders == null || cleanRemainders.size() != cleanSize) {
+            return expanded;
+        }
+
+        for (int i = 0; i < cleanSize; i++) {
+            ItemStack remainder = cleanRemainders.get(i);
+            expanded.set(i, remainder == null ? ItemStack.EMPTY : remainder);
+        }
+        return expanded;
     }
 
     public static long getFailureCount() {
