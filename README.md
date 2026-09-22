@@ -1,58 +1,121 @@
 # Retro Polymorph
 
-Retro Polymorph is an unofficial Minecraft 1.12.2 / Cleanroom port of
-[Polymorph](https://github.com/illusivesoulworks/polymorph), created by
-[Illusive Soulworks (TheIllusiveC4)](https://github.com/illusivesoulworks).
+Retro Polymorph is an unofficial Minecraft 1.12.2 port of
+[Polymorph](https://github.com/illusivesoulworks/polymorph) by Illusive Soulworks.
+It resolves recipe conflicts when several recipes accept the same inputs and
+lets the player choose which recipe should be used.
 
-When multiple crafting or smelting recipes share the exact same ingredients, Retro Polymorph detects the conflict and displays a compact selection button above the output slot, allowing players to choose which output they want.
+## Requirements
 
-## Supported Mods & Integrations
+- Minecraft 1.12.2
+- Forge 14.23.5.2847+
+- MixinBooter 11.0+
 
-- **Crafting Tables**: Vanilla 2x2 and 3x3 grids, and modded crafting tables using Forge crafting logic.
-- **Furnaces**: Vanilla furnaces and modded furnaces that reuse the vanilla
-  `TileEntityFurnace` smelting machinery. Furnaces with custom tile entities,
-  recipe maps, processing ticks, or XP logic require a dedicated adapter.
-- **RFTools**: Crafter (Tier 1 / 2 / 3) ghost matrix recipe selection.
-- **Applied Energistics 2**: Crafting Terminal, Wireless Crafting Terminal, and Pattern Terminal.
-- **Extended Crafting**: Basic, Advanced, Elite, and Ultimate crafting tables.
-- **Just Enough Items (JEI / HEI)**: Recipe transfer support and dynamic GUI exclusion areas (so JEI item lists do not overlap open selection panels).
+## Features
 
-## How It Works
+- Server-authoritative recipe selection.
+- Persistent player preferences for normal crafting conflicts.
+- Compact and classic selector layouts with mouse, wheel and keyboard control.
+- Crafting and furnace conflict handling.
+- JEI / HEI recipe-transfer integration.
+- Optional FastSuite acceleration with a safe Forge-registry fallback.
+- Ordered modpack policy for preferred mods and exact recipes.
+- Focused integrations for custom crafting engines instead of unsafe slot guessing.
 
-1. Place items into a crafting grid or furnace.
-2. If multiple recipes match, a small icon appears next to the result slot.
-3. Click the button to open the recipe selection ribbon.
-4. Click your desired recipe (or scroll through options using the mouse wheel).
-5. The chosen recipe is remembered for subsequent crafting.
+## Supported integrations
+
+- Vanilla 2x2 / 3x3 crafting and vanilla-style crafting tables
+- Vanilla furnaces and furnaces using vanilla `TileEntityFurnace` logic
+- Applied Energistics 2: Crafting Terminal, Wireless Crafting Terminal, Pattern Terminal
+- Refined Storage: Crafting Grid and regular Pattern Grid
+- RFTools / RFTools Control
+- Extended Crafting tables and Ender Crafter
+- Tinkers' Construct Crafting Station
+- Ender IO Crafter
+- Thaumcraft 6 Arcane Workbench
+- Cyclic Workbench and Auto-Crafter
+- IndustrialCraft 2 Batch Crafter and Industrial Workbench
+- Mekanism Formulaic Assemblicator (manual mode)
+- Thermal Expansion Sequential Fabricator
+- Extra Utilities 2 Mechanical / Analog Crafter
+- Retro Sophisticated Backpacks Crafting Upgrade
+- JEI / HEI transfer and exclusion-area integration
+
+Forestry Worktable and Immersive Engineering Engineer's Workbench are detected
+and left to their native recipe-selection UI instead of receiving a duplicate
+Retro Polymorph selector.
+
+### Retro Sophisticated Backpacks
+
+The Crafting Upgrade is a focused integration. Retro Polymorph resolves the
+active backpack crafting wrapper/output pair and stores the chosen recipe on
+that crafting matrix handler. The common `CraftingManager` hook then uses that
+recipe when the backpack asks Forge for the matching recipe/result/remainders.
+No dedicated RSB mixin is required.
+
+## Usage
+
+When more than one recipe matches the current inputs, a selector button appears
+near the result slot.
+
+- Left click: open/close the recipe selector.
+- Right click: clear the remembered choice and return to automatic selection.
+- Mouse wheel over the button: cycle recipes when enabled.
+- Keyboard while open: Left/Right, Home/End, Page Up/Page Down, Enter, 1-9, Esc.
+
+The chosen recipe is remembered for later occurrences of the same conflict when
+the integration supports player preferences.
 
 ## Configuration
 
-Client settings can be configured in `config/retropolymorph.cfg`:
+Configuration is stored in `config/retropolymorph.cfg`.
+
+The important policy options are ordered lists: entries near the top have higher
+priority.
 
 ```ini
-selector {
-    # Show the recipe selector when a GUI has multiple recipe matches.
-    B:enabled=true
+policy {
+    S:preferredMods <
+        thermalfoundation
+        mekanism
+        *
+        minecraft
+    >
 
-    # Number of recipe cells per selector row.
-    I:columns=5
-
-    # Maximum number of recipe rows shown on one page.
-    I:rows=1
-
-    # Horizontal and vertical button offsets (in pixels) for modded GUI compatibility.
-    I:buttonOffsetX=0
-    I:buttonOffsetY=0
-
-    # Right-click the selector button to reset to the default recipe.
-    B:rightClickClears=true
-
-    # Close the selector panel immediately after clicking a recipe.
-    B:closeAfterSelection=true
+    S:preferredRecipes <
+        enderio:example_recipe
+        ic2:another_recipe
+    >
 }
 ```
 
-## Building from Source
+`*` represents every mod not explicitly listed. If omitted, unlisted mods are
+placed after the listed entries. Explicit player choices take precedence over
+modpack policy.
+
+Integrations can be disabled individually under the `integrations` config
+category. Safety guards remain active for custom recipe engines where generic
+fallback would be unsafe.
+
+## Addon API
+
+Third-party integrations should register a focused adapter through
+`RetroPolymorphAPI` and implement the `RecipeSelectionAdapter.probe(...)`
+contract. Use the standard addon priority unless the integration intentionally
+replaces a built-in adapter.
+
+```java
+RetroPolymorphAPI.registerAdapter(
+        new ResourceLocation("examplemod", "custom_table"),
+        RetroPolymorphAPI.PRIORITY_NORMAL,
+        new ExampleRecipeSelectionAdapter());
+```
+
+Custom machine/processing engines can use `registerMachineAdapter(...)`. Recipe
+keys must be stable and wire-safe, selection must control the real craft path,
+and matching/mutation must remain on the Minecraft server thread.
+
+## Building
 
 ```bash
 git clone https://github.com/Sosea1/RetroPolymorph.git
@@ -60,16 +123,14 @@ cd RetroPolymorph
 ./gradlew build
 ```
 
-The compiled mod jar will be in `build/libs/`.
+The compiled JAR is written to `build/libs/`.
 
-## Credits & License
+## Credits and license
 
-- **Illusive Soulworks / TheIllusiveC4** — author of the original Polymorph;
-  original concept, implementation, and UI assets.
-- **Sosea1** — Retro Polymorph's Minecraft 1.12.2 port, integrations, and
-  maintenance.
+- Illusive Soulworks / TheIllusiveC4 — original Polymorph, concept and inherited UI assets
+- Sosea1 — Minecraft 1.12.2 port, integrations and maintenance
 
 Retro Polymorph is an independent, unofficial port and is not affiliated with
-or endorsed by Illusive Soulworks. Source code and inherited assets are
-distributed under **LGPL-3.0-or-later**; see `LICENSE`, `COPYING`, and
-`COPYING.LESSER`.
+or endorsed by Illusive Soulworks. The project is licensed under
+**LGPL-3.0-or-later**. See [`LICENSE`](LICENSE) for the complete license text and
+asset attribution.

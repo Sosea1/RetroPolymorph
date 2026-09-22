@@ -59,10 +59,7 @@ if (propertyBool('publish_to_curseforge')) {
         if (propertyBool('server_side')) {
             mainFile.addEnvironment 'Server'
         }
-        if (propertyBool('publish_with_changelog')) {
-            mainFile.changelog = parserChangelog()
-            mainFile.changelogType = 'markdown'
-        }
+        // Changelog text is entered manually in the CurseForge release form.
         if (propertyBool('use_mixins')) {
             mainFile.addRequirement 'mixin-booter'
         }
@@ -97,9 +94,7 @@ if (propertyBool('publish_to_modrinth')) {
                 }
             }
         }
-        if (propertyBool('publish_with_changelog')) {
-            changelog = parserChangelog()
-        }
+        // Changelog text is entered manually in the Modrinth release form.
         if (propertyBool('modrinth_sync_readme')) {
             syncBodyFrom = file('README.md').text
             tasks.modrinth.dependsOn(tasks.modrinthSyncBody)

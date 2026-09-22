@@ -1,9 +1,5 @@
-/**
- * It is advised that you do not edit anything in the build.gradle; unless you are sure of what you are doing
- */
 import com.gtnewhorizons.retrofuturagradle.mcp.InjectTagsTask
 import net.darkhax.curseforgegradle.TaskPublishCurseForge
-import org.jetbrains.changelog.Changelog
 import org.jetbrains.gradle.ext.Gradle
 
 plugins {
@@ -12,10 +8,9 @@ plugins {
     id 'maven-publish'
     id 'org.jetbrains.gradle.plugin.idea-ext' version '1.4.1'
     id 'com.gtnewhorizons.retrofuturagradle' version '2.0.2'
-    id 'net.darkhax.curseforgegradle' version '1.2.+' apply false
-    id 'com.modrinth.minotaur' version '2.+' apply false
-    id 'org.jetbrains.changelog' version '2.5.0'
-    id 'com.gradleup.shadow' version '9.4.+'
+    id 'net.darkhax.curseforgegradle' version '1.2.31' apply false
+    id 'com.modrinth.minotaur' version '2.8.10' apply false
+    id 'com.gradleup.shadow' version '9.4.3'
 }
 
 apply from: 'gradle/scripts/helpers.gradle'
@@ -86,7 +81,7 @@ minecraft {
     useDependencyAccessTransformers.set(propertyBool('use_dependency_at_files'))
 
     username.set(propertyString('minecraft_username'))
-    
+
     // Add any additional tweaker classes here
     extraTweakClasses.addAll(propertyStringList('extra_tweak_classes'))
 
@@ -194,6 +189,7 @@ sourceSets {
     compatStubs {
         java.srcDir 'src/compatStubs/java'
         resources.srcDirs = []
+        compileClasspath += sourceSets.main.compileClasspath
     }
     main {
         compileClasspath += compatStubs.output
@@ -237,7 +233,7 @@ processResources {
                 'mixin_package': propertyString('mixin_package')
         )
     }
-    
+
     if (propertyBool('use_access_transformer')) {
         rename '(.+_at.cfg)', 'META-INF/$1'
     }
@@ -245,7 +241,7 @@ processResources {
 }
 
 jar {
-    from(rootProject.files('LICENSE', 'COPYING', 'COPYING.LESSER')) {
+    from(rootProject.files('LICENSE')) {
         into 'META-INF'
     }
 
@@ -325,19 +321,6 @@ test {
             showStandardStreams = true
         }
     }
-}
-
-String parserChangelog() {
-    if (!file('CHANGELOG.md').exists()) {
-        throw new GradleException('publish_with_changelog is true, but CHANGELOG.md does not exist in the workspace!')
-    }
-    String parsedChangelog = changelog.renderItem(
-            changelog.get(propertyString('mod_version')).withHeader(false).withEmptySections(false),
-            Changelog.OutputType.MARKDOWN)
-    if (parsedChangelog.isEmpty()) {
-        throw new GradleException('publish_with_changelog is true, but the changelog for the latest version is empty!')
-    }
-    return parsedChangelog
 }
 
 tasks.register('generateMixinJson') {

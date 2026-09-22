@@ -24,3 +24,9 @@ build
 eclipse
 run
 scratch/
+logs/
+/META-INF/
+/mcmod.info
+/pack.mcmeta
+/mixin.*.json
+/mixins.*.json
