@@ -10,7 +10,7 @@ public final class RecipeOption {
 
     public RecipeOption(String recipeKey, ItemStack output) {
         this.recipeKey = recipeKey;
-        this.output = output.isEmpty() ? ItemStack.EMPTY : output.copy();
+        this.output = output == null || output.isEmpty() ? ItemStack.EMPTY : output.copy();
     }
 
     public String getRecipeKey() {

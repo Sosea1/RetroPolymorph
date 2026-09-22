@@ -4,9 +4,9 @@ import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.world.World;
+import dev.sosea1.retropolymorph.core.CraftingRecipeOptionCollector;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -47,24 +47,7 @@ public interface RecipeSelectionContext extends SelectionContext {
         }
 
         List<IRecipe> matches = findAllMatches(world);
-        if (matches.size() <= 1) {
-            return Collections.emptyList();
-        }
-
-        ArrayList<RecipeOption> options = new ArrayList<RecipeOption>(matches.size());
-        for (IRecipe recipe : matches) {
-            String key = getRecipeKey(recipe);
-            if (!RecipeKey.isWireSafe(key)) {
-                continue;
-            }
-
-            ItemStack output = recipe.getCraftingResult(matrix);
-            if (!output.isEmpty()) {
-                options.add(new RecipeOption(key, output.copy()));
-            }
-        }
-
-        return options.size() <= 1 ? Collections.<RecipeOption>emptyList() : options;
+        return CraftingRecipeOptionCollector.collect(this, matrix, matches);
     }
 
     static boolean isEmpty(InventoryCrafting matrix) {

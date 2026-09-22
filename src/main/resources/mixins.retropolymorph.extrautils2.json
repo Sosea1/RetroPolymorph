@@ -1,0 +1,17 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "dev.sosea1.retropolymorph.mixin.compat.extrautils2",
+  "refmap": "mixins.retropolymorph.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "ExtraUtilities2TileCrafterMixin",
+    "ExtraUtilities2TileAnalogCrafterMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

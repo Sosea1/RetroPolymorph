@@ -8,7 +8,9 @@
   "mixins": [
     "ExtendedTableCraftingMixin",
     "ExtendedTableRecipeManagerMixin",
-    "ExtendedTableResultHandlerMixin"
+    "ExtendedTableResultHandlerMixin",
+    "TileEnderCrafterMixin",
+    "EnderCrafterRecipeManagerMixin"
   ],
   "client": [],
   "server": [],

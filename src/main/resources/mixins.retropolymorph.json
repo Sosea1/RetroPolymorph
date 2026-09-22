@@ -8,6 +8,7 @@
   "mixins": [
     "InventoryCraftingMixin",
     "SlotCraftingAccessor",
+    "SlotCraftingSelectionTransactionMixin",
     "CraftingManagerMixin",
     "TileEntityFurnaceMixin",
     "FurnaceRecipesMixin",
@@ -15,7 +16,8 @@
     "SlotFurnaceOutputMixin"
   ],
   "client": [
-    "GuiContainerAccessor"
+    "GuiContainerAccessor",
+    "GuiScreenAccessor"
   ],
   "server": [],
   "injectors": {

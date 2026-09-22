@@ -2,36 +2,30 @@ package dev.sosea1.retropolymorph.client;
 
 import dev.sosea1.retropolymorph.api.RecipeOption;
 import dev.sosea1.retropolymorph.api.SelectionContext;
+import dev.sosea1.retropolymorph.api.SelectionReason;
+import dev.sosea1.retropolymorph.api.SelectorPlacement;
 import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import dev.sosea1.retropolymorph.mixin.GuiContainerAccessor;
+import dev.sosea1.retropolymorph.mixin.GuiScreenAccessor;
 import dev.sosea1.retropolymorph.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Gui;
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiContainer;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.inventory.Slot;
+import net.minecraft.init.SoundEvents;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.client.config.GuiUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.lwjgl.input.Keyboard;
 
-import java.util.ArrayList;
+import java.lang.reflect.Field;
 import java.util.List;
 
 public final class RecipeSelectorController {
 
-    private static final int BUTTON_ID = 0x504345;
+    private static final Logger LOGGER = LogManager.getLogger("Retro Polymorph");
 
-    private static final ResourceLocation SPRITE_OUTPUT =
-            new ResourceLocation("retropolymorph", "textures/gui/sprites/output_button.png");
-    private static final ResourceLocation SPRITE_OUTPUT_HIGHLIGHTED =
-            new ResourceLocation("retropolymorph", "textures/gui/sprites/output_button_highlighted.png");
-    private static final ResourceLocation SPRITE_CURRENT_OUTPUT =
-            new ResourceLocation("retropolymorph", "textures/gui/sprites/current_output.png");
-    private static final ResourceLocation SPRITE_CURRENT_OUTPUT_HIGHLIGHTED =
-            new ResourceLocation("retropolymorph", "textures/gui/sprites/current_output_highlighted.png");
+    private static final int BUTTON_ID = 0x504345;
 
     private final GuiContainer gui;
     private final SelectionContext context;
@@ -39,15 +33,18 @@ public final class RecipeSelectorController {
     private final PolymorphButton button;
     private final ClientRecipeCache cache = new ClientRecipeCache();
     private final SelectorLayout layout;
-    private final ArrayList<String> tooltipLines = new ArrayList<String>(4);
+    private final SelectorNavigationState navigation = new SelectorNavigationState();
+    private final RecipeSelectorRenderer renderer;
 
     private final int buttonOffsetX;
     private final int buttonOffsetY;
-    private final boolean showRecipeKeyInTooltip;
     private final boolean rightClickClears;
+    private final boolean wheelCyclesButton;
     private final boolean closeAfterSelection;
 
     private boolean expanded;
+    private boolean buttonReattachLogged;
+    private int inputRevision;
     private long appliedSelectionRevision;
 
     RecipeSelectorController(
@@ -59,20 +56,35 @@ public final class RecipeSelectorController {
         this.sessionToken = sessionToken;
         this.button = new PolymorphButton(BUTTON_ID, 0, 0);
         this.button.visible = false;
-        this.layout = new SelectorLayout(
-                PolymorphConfig.getSelectorColumns(),
-                PolymorphConfig.getSelectorRows());
+        this.layout = new SelectorLayout(PolymorphConfig.getSelectorMode());
 
         this.buttonOffsetX = PolymorphConfig.getButtonOffsetX();
         this.buttonOffsetY = PolymorphConfig.getButtonOffsetY();
-        this.showRecipeKeyInTooltip = PolymorphConfig.isShowRecipeKeyInTooltip();
+        this.renderer = new RecipeSelectorRenderer(
+                PolymorphConfig.isShowRecipeKeyInTooltip(),
+                PolymorphConfig.isShowRecipeSourceInTooltip());
         this.rightClickClears = PolymorphConfig.isRightClickClears();
+        this.wheelCyclesButton = PolymorphConfig.isWheelCyclesButton();
         this.closeAfterSelection = PolymorphConfig.isCloseAfterSelection();
 
         this.appliedSelectionRevision = ClientSelectionTracker.getRevision(
                 context.getContainer().windowId,
                 sessionToken);
         updateButtonPosition();
+        SelectorPlacement initialPlacement = context.getSelectorPlacement();
+        if (initialPlacement.getMode() == SelectorPlacement.AnchorMode.GUI_TOP_RIGHT) {
+            GuiContainerAccessor accessor = (GuiContainerAccessor) gui;
+            LOGGER.debug(
+                    "Selector GUI-corner anchor active: gui={}, container={}, bounds={},{},{}x{}, button={},{}",
+                    gui.getClass().getName(),
+                    context.getContainer().getClass().getName(),
+                    Integer.valueOf(accessor.retropolymorph$getGuiLeft()),
+                    Integer.valueOf(accessor.retropolymorph$getGuiTop()),
+                    Integer.valueOf(accessor.retropolymorph$getXSize()),
+                    Integer.valueOf(accessor.retropolymorph$getYSize()),
+                    Integer.valueOf(this.button.x),
+                    Integer.valueOf(this.button.y));
+        }
     }
 
     public GuiButton getButton() {
@@ -139,42 +151,89 @@ public final class RecipeSelectorController {
             return;
         }
 
+        if (!this.context.getSelectorPlacement().isVisible()) {
+            hide();
+            return;
+        }
+
         int windowId = this.context.getContainer().windowId;
+        boolean windowChanged = ClientSelectionTracker.rebindWindowId(
+                windowId, this.sessionToken);
+        if (windowChanged) {
+            LOGGER.debug(
+                    "Selector window rebound: container={}, session={}, window={}",
+                    this.context.getContainer().getClass().getName(),
+                    Integer.valueOf(this.sessionToken),
+                    Integer.valueOf(windowId));
+        }
+
+        boolean inputsChanged = this.cache.refreshInputs(this.context);
+        if (windowChanged || inputsChanged) {
+            this.inputRevision = nextInputRevision(this.inputRevision);
+            ClientSelectionTracker.expectInputRevision(
+                    windowId, this.sessionToken, this.inputRevision);
+            // A successful craft changes stack counts one tick before the server's
+            // refreshed recipe list returns. Clearing choices here hid the selector
+            // during that round-trip, which looked like a button flicker on every
+            // WCT/AE2 craft. Keep the last authoritative choices visible for ordinary
+            // input changes; a real window rebind must still discard stale choices.
+            if (windowChanged) {
+                this.cache.clearChoices();
+            }
+            this.layout.resetPage();
+            this.navigation.reset();
+            this.expanded = false;
+            SelectorQueryScheduler.scheduleQuery(windowId, this.sessionToken, this.inputRevision);
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(
+                        "Selector query: container={}, context={}, revision={}, inputs={}",
+                        this.context.getContainer().getClass().getName(),
+                        this.context.getClass().getName(),
+                        Integer.valueOf(this.inputRevision),
+                        describeInputs());
+            }
+        }
+
         long selectionRevision = ClientSelectionTracker.getRevision(windowId, this.sessionToken);
         boolean authoritativeUpdate = selectionRevision != this.appliedSelectionRevision;
         if (authoritativeUpdate) {
-            this.context.applyRemoteSelection(
-                    ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken));
-            if (!ClientSelectionTracker.wasLastAccepted(windowId, this.sessionToken)) {
-                this.cache.invalidate();
-            }
+            String selected = ClientSelectionTracker.getSelectedRecipeKey(
+                    windowId, this.sessionToken);
+            this.context.applyRemoteSelection(selected);
+            boolean choicesChanged = this.cache.setChoices(
+                    ClientSelectionTracker.getOptions(windowId, this.sessionToken),
+                    selected);
             this.appliedSelectionRevision = selectionRevision;
-        }
 
-        boolean changed = this.cache.refresh(this.context, mc.world);
-        List<RecipeOption> choices = this.cache.getChoices();
-
-        if (changed) {
-            this.layout.resetPage();
-            this.expanded = false;
-            if (!authoritativeUpdate && ClientSelectionTracker.reconcile(
-                    windowId,
-                    this.sessionToken,
-                    choices,
-                    this.context.retainSelectionWhenOptionsEmpty())) {
-                NetworkHandler.query(windowId, this.sessionToken);
+            if (choicesChanged) {
+                this.layout.resetPage();
+                this.navigation.reset();
+                this.expanded = false;
             }
-            JeiTransferIntent.tryApply(this.context, choices, this.sessionToken);
+
+            List<RecipeOption> choices = this.cache.getChoices();
+            JeiTransferIntent.tryApply(
+                    this.context, choices, this.sessionToken, this.inputRevision);
+            LOGGER.debug(
+                    "Selector sync: container={}, revision={}, selected={}, matches={}, selectorVisible={}",
+                    this.context.getContainer().getClass().getName(),
+                    Integer.valueOf(this.inputRevision),
+                    selected,
+                    Integer.valueOf(choices.size()),
+                    Boolean.valueOf(choices.size() > 1));
         }
 
+        ensureButtonAttached();
         updateButtonPosition();
-        this.button.visible = choices.size() > 1;
+        List<RecipeOption> choices = this.cache.getChoices();
+        this.button.visible = choices.size() > 1 && this.context.getSelectorPlacement().isVisible();
         String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
         boolean error = !ClientSelectionTracker.wasLastAccepted(windowId, this.sessionToken);
         this.button.setState(selected != null, error);
 
         if (!this.button.visible) {
             this.expanded = false;
+            this.navigation.reset();
         }
     }
 
@@ -184,8 +243,22 @@ public final class RecipeSelectorController {
         }
 
         Minecraft mc = Minecraft.getMinecraft();
+        int windowId = this.context.getContainer().windowId;
+        String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
+        SelectionReason reason = ClientSelectionTracker.getLastReason(windowId, this.sessionToken);
         if (this.expanded) {
-            drawPanel(mc, this.cache.getChoices(), mouseX, mouseY);
+            List<RecipeOption> choices = this.cache.getChoices();
+            updateLayout(choices.size());
+            this.renderer.drawPanel(
+                    mc,
+                    this.gui,
+                    this.layout,
+                    this.navigation,
+                    choices,
+                    selected,
+                    reason,
+                    mouseX,
+                    mouseY);
         }
 
         if (contains(
@@ -195,7 +268,18 @@ public final class RecipeSelectorController {
                 this.button.y,
                 this.button.width,
                 this.button.height)) {
-            drawButtonTooltip(mc, mouseX, mouseY);
+            this.renderer.drawButtonTooltip(
+                    mc,
+                    this.gui,
+                    this.cache.getChoices().size(),
+                    ClientSelectionTracker.wasLastAccepted(windowId, this.sessionToken),
+                    selected,
+                    reason,
+                    this.rightClickClears,
+                    this.wheelCyclesButton,
+                    this.expanded,
+                    mouseX,
+                    mouseY);
         }
     }
 
@@ -206,103 +290,251 @@ public final class RecipeSelectorController {
 
         this.expanded = !this.expanded;
         if (this.expanded) {
-            updateLayout(this.cache.getChoices().size());
+            List<RecipeOption> choices = this.cache.getChoices();
+            updateLayout(choices.size());
+            String selected = ClientSelectionTracker.getSelectedRecipeKey(
+                    this.context.getContainer().windowId,
+                    this.sessionToken);
+            int selectedIndex = indexOfRecipeKey(choices, selected);
+            this.navigation.focusSelectedOrFirst(choices.size(), selectedIndex);
+            this.layout.ensureVisible(this.navigation.getFocusedIndex());
+        } else {
+            this.navigation.reset();
         }
     }
 
-    boolean handleMouseInput(int mouseX, int mouseY, int mouseButton, boolean pressed, int wheel) {
+    boolean handleKeyboardInput(int keyCode) {
         if (!this.expanded || !this.button.visible) {
             return false;
         }
 
         List<RecipeOption> choices = this.cache.getChoices();
+        if (choices.isEmpty()) {
+            this.expanded = false;
+            this.navigation.reset();
+            return false;
+        }
         updateLayout(choices.size());
-        boolean insidePanel = this.layout.isInsidePanel(mouseX, mouseY);
 
-        if (wheel != 0) {
-            if (!insidePanel) {
-                return false;
-            }
+        SelectorAction action = SelectorInteractionHandler.translateKeyboard(
+                keyCode,
+                this.expanded,
+                this.button.visible,
+                choices.size(),
+                this.layout.getVisibleCount(),
+                this.layout.getStartIndex(),
+                this.layout.getEndIndex());
 
-            this.layout.moveOffset(wheel < 0 ? 1 : -1);
+        if (action.getType() != SelectorAction.Type.NONE) {
+            executeAction(action, choices);
             return true;
         }
+        return false;
+    }
 
-        if (!pressed) {
+    boolean handleMouseInput(int mouseX, int mouseY, int mouseButton, boolean pressed, int wheel) {
+        if (!this.button.visible) {
             return false;
         }
 
-        if (mouseButton == 0 && contains(
+        List<RecipeOption> choices = this.cache.getChoices();
+        if (this.expanded) {
+            updateLayout(choices.size());
+        }
+
+        SelectorAction action = SelectorInteractionHandler.translateMouse(
                 mouseX,
                 mouseY,
+                mouseButton,
+                pressed,
+                wheel,
+                this.button.visible,
+                this.expanded,
+                this.wheelCyclesButton,
+                this.rightClickClears,
+                this.layout,
                 this.button.x,
                 this.button.y,
                 this.button.width,
-                this.button.height)) {
-            return false;
-        }
+                this.button.height,
+                choices.size());
 
-        if (!insidePanel) {
-            if (mouseButton == 0) {
-                this.expanded = false;
-            }
-            return false;
-        }
-
-        if (mouseButton != 0) {
+        if (action.getType() != SelectorAction.Type.NONE) {
+            executeAction(action, choices);
             return true;
         }
 
-        if (this.layout.isLeftArrow(mouseX, mouseY)) {
-            this.layout.moveOffset(-1);
-            return true;
-        } else if (this.layout.isRightArrow(mouseX, mouseY)) {
-            this.layout.moveOffset(1);
-            return true;
-        }
-
-        int choiceIndex = this.layout.choiceAt(mouseX, mouseY);
-        if (choiceIndex >= 0 && choiceIndex < choices.size()) {
-            RecipeOption choice = choices.get(choiceIndex);
-            ClientSelectionTracker.apply(
-                    this.context.getContainer().windowId,
-                    this.sessionToken,
-                    true,
-                    choice.getRecipeKey());
-            this.context.applyRemoteSelection(choice.getRecipeKey());
-            NetworkHandler.select(
-                    this.context.getContainer().windowId,
-                    this.sessionToken,
-                    choice.getRecipeKey());
-            if (this.closeAfterSelection) {
-                this.expanded = false;
+        if (this.expanded && (wheel != 0 || pressed)) {
+            if (this.layout.isInsidePanel(mouseX, mouseY)
+                    || contains(mouseX, mouseY, this.button.x, this.button.y, this.button.width, this.button.height)) {
+                return true;
             }
         }
-        return true;
+        return false;
+    }
+
+    private void executeAction(SelectorAction action, List<RecipeOption> choices) {
+        switch (action.getType()) {
+            case TOGGLE:
+                toggle();
+                break;
+            case CLOSE:
+                this.expanded = false;
+                this.navigation.reset();
+                break;
+            case CLEAR_TO_AUTO:
+                clearSelection();
+                break;
+            case CYCLE_SELECTION:
+                cycleSelection(action.getValue());
+                break;
+            case MOVE_FOCUS:
+                moveKeyboardFocus(action.getValue(), choices.size());
+                break;
+            case FOCUS_ABSOLUTE:
+                focusAbsolute(action.getValue(), choices.size());
+                break;
+            case SELECT_FOCUSED:
+                selectFocusedChoice(choices);
+                break;
+            case SELECT_INDEX:
+                int index = action.getValue();
+                this.navigation.setFocusedIndex(index, choices.size());
+                selectChoice(choices, index);
+                break;
+            case SCROLL_PANEL:
+                this.layout.moveOffset(action.getValue());
+                this.navigation.keepInsideVisibleRange(
+                        this.layout.getStartIndex(), this.layout.getEndIndex(), choices.size());
+                break;
+            case PAGE_LEFT:
+                this.layout.pageLeft();
+                this.navigation.keepInsideVisibleRange(
+                        this.layout.getStartIndex(), this.layout.getEndIndex(), choices.size());
+                playSelectionSound(Minecraft.getMinecraft());
+                break;
+            case PAGE_RIGHT:
+                this.layout.pageRight();
+                this.navigation.keepInsideVisibleRange(
+                        this.layout.getStartIndex(), this.layout.getEndIndex(), choices.size());
+                playSelectionSound(Minecraft.getMinecraft());
+                break;
+            case NONE:
+            default:
+                break;
+        }
+    }
+
+    private void cycleSelection(int delta) {
+        List<RecipeOption> choices = this.cache.getChoices();
+        if (choices.size() <= 1) {
+            return;
+        }
+        String selected = ClientSelectionTracker.getSelectedRecipeKey(
+                this.context.getContainer().windowId, this.sessionToken);
+        int target = this.navigation.cycleFromSelection(
+                indexOfRecipeKey(choices, selected), delta, choices.size());
+        if (target >= 0) {
+            selectChoice(choices, target);
+        }
+    }
+
+    private void moveKeyboardFocus(int delta, int choiceCount) {
+        if (this.navigation.moveBy(delta, choiceCount)) {
+            playSelectionSound(Minecraft.getMinecraft());
+        }
+        this.layout.ensureVisible(this.navigation.getFocusedIndex());
+    }
+
+    private void focusAbsolute(int index, int choiceCount) {
+        if (this.navigation.setFocusedIndex(index, choiceCount)) {
+            playSelectionSound(Minecraft.getMinecraft());
+        }
+        this.layout.ensureVisible(this.navigation.getFocusedIndex());
+    }
+
+    private void selectFocusedChoice(List<RecipeOption> choices) {
+        int focused = this.navigation.getFocusedIndex();
+        if (focused < 0 || focused >= choices.size()) {
+            this.navigation.focusSelectedOrFirst(choices.size(), -1);
+            focused = this.navigation.getFocusedIndex();
+        }
+        selectChoice(choices, focused);
+    }
+
+    private void selectChoice(List<RecipeOption> choices, int choiceIndex) {
+        if (choiceIndex < 0 || choiceIndex >= choices.size()) {
+            return;
+        }
+        RecipeOption choice = choices.get(choiceIndex);
+        ClientSelectionTracker.applyOptimisticSelection(
+                this.context.getContainer().windowId,
+                this.sessionToken,
+                choice.getRecipeKey());
+        this.context.applyRemoteSelection(choice.getRecipeKey());
+        SelectorQueryScheduler.cancel();
+        NetworkHandler.select(
+                this.context.getContainer().windowId,
+                this.sessionToken,
+                this.inputRevision,
+                choice.getRecipeKey());
+        playSelectionSound(Minecraft.getMinecraft());
+        if (this.closeAfterSelection) {
+            this.expanded = false;
+            this.navigation.reset();
+        }
     }
 
     void clearSelection() {
         this.expanded = false;
-        NetworkHandler.clear(this.context.getContainer().windowId, this.sessionToken);
+        this.navigation.reset();
+        ClientSelectionTracker.applyOptimisticSelection(
+                this.context.getContainer().windowId, this.sessionToken, null);
+        this.context.applyRemoteSelection(null);
+        SelectorQueryScheduler.cancel();
+        NetworkHandler.clear(
+                this.context.getContainer().windowId,
+                this.sessionToken,
+                this.inputRevision);
+        playSelectionSound(Minecraft.getMinecraft());
     }
 
     private void hide() {
         this.button.visible = false;
         this.expanded = false;
+        this.navigation.reset();
+    }
+
+    private void ensureButtonAttached() {
+        List<GuiButton> buttons = ((GuiScreenAccessor) this.gui).retropolymorph$getButtonList();
+        if (buttons.contains(this.button)) {
+            return;
+        }
+
+        buttons.add(this.button);
+        if (!this.buttonReattachLogged) {
+            this.buttonReattachLogged = true;
+            LOGGER.debug(
+                    "Selector button reattached after GUI button-list rebuild: gui={}, container={}",
+                    this.gui.getClass().getName(),
+                    this.context.getContainer().getClass().getName());
+        }
     }
 
     private void updateButtonPosition() {
-        GuiContainerAccessor accessor = (GuiContainerAccessor) this.gui;
-        Slot result = this.context.getResultSlot();
+        SelectorPlacement placement = this.context.getSelectorPlacement();
+        if (!placement.isVisible()) {
+            return;
+        }
 
-        int x = accessor.retropolymorph$getGuiLeft() + result.xPos + (16 - PolymorphButton.BUTTON_SIZE) / 2;
-        int y = accessor.retropolymorph$getGuiTop() + result.yPos - 22;
-
-        x += this.buttonOffsetX + this.context.getButtonOffsetX();
-        y += this.buttonOffsetY + this.context.getButtonOffsetY();
-
-        this.button.x = clamp(x, 2, Math.max(2, this.gui.width - PolymorphButton.BUTTON_SIZE - 2));
-        this.button.y = clamp(y, 2, Math.max(2, this.gui.height - PolymorphButton.BUTTON_SIZE - 2));
+        SelectorPlacementResolver.Position pos = SelectorPlacementResolver.resolveButtonPosition(
+                this.gui,
+                placement,
+                this.buttonOffsetX,
+                this.buttonOffsetY,
+                PolymorphButton.BUTTON_SIZE);
+        this.button.x = pos.x;
+        this.button.y = pos.y;
     }
 
     private void updateLayout(int choiceCount) {
@@ -316,159 +548,52 @@ public final class RecipeSelectorController {
                 choiceCount);
     }
 
-    private void drawPanel(Minecraft mc, List<RecipeOption> choices, int mouseX, int mouseY) {
-        updateLayout(choices.size());
-        int start = this.layout.getStartIndex();
-        int end = this.layout.getEndIndex();
-        String selected = ClientSelectionTracker.getSelectedRecipeKey(
-                this.context.getContainer().windowId,
-                this.sessionToken);
-
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        GlStateManager.enableBlend();
-        GlStateManager.tryBlendFuncSeparate(
-                GlStateManager.SourceFactor.SRC_ALPHA,
-                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-                GlStateManager.SourceFactor.ONE,
-                GlStateManager.DestFactor.ZERO);
-
-        for (int index = start; index < end; index++) {
-            int cellX = this.layout.getCellX(index);
-            int cellY = this.layout.getCellY(index);
-
-            RecipeOption choice = choices.get(index);
-            boolean isSelected = selected != null && selected.equals(choice.getRecipeKey());
-            boolean hovered = contains(
-                    mouseX,
-                    mouseY,
-                    cellX,
-                    cellY,
-                    SelectorLayout.CELL_SIZE,
-                    SelectorLayout.CELL_SIZE);
-
-            ResourceLocation sprite;
-            if (isSelected) {
-                sprite = hovered ? SPRITE_CURRENT_OUTPUT_HIGHLIGHTED : SPRITE_CURRENT_OUTPUT;
-            } else {
-                sprite = hovered ? SPRITE_OUTPUT_HIGHLIGHTED : SPRITE_OUTPUT;
-            }
-
-            mc.getTextureManager().bindTexture(sprite);
-            Gui.drawModalRectWithCustomSizedTexture(cellX, cellY, 0, 0, 25, 25, 25, 25);
-
-            ItemStack output = choice.getOutput();
-            if (!output.isEmpty()) {
-                RenderHelper.enableGUIStandardItemLighting();
-                GlStateManager.enableDepth();
-                mc.getRenderItem().renderItemAndEffectIntoGUI(output, cellX + 4, cellY + 4);
-                mc.getRenderItem().renderItemOverlays(mc.fontRenderer, output, cellX + 4, cellY + 4);
-                RenderHelper.disableStandardItemLighting();
-            } else {
-                mc.fontRenderer.drawString("?", cellX + 9, cellY + 8, 0xFFFFFF);
-            }
-        }
-
-        GlStateManager.disableLighting();
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-
-        if (this.layout.hasNavigation()) {
-            int pLeft = this.layout.getPanelLeft();
-            int pTop = this.layout.getPanelTop();
-            int pRight = this.layout.getPanelRight();
-            int pBottom = this.layout.getPanelBottom();
-
-            boolean leftHover = this.layout.isLeftArrow(mouseX, mouseY);
-            boolean rightHover = this.layout.isRightArrow(mouseX, mouseY);
-
-            // Left navigation arrow button
-            int leftBg = leftHover ? 0xFFD8D8D8 : 0xFFC6C6C6;
-            Gui.drawRect(pLeft, pTop, pLeft + SelectorLayout.NAV_ARROW_WIDTH, pBottom, leftBg);
-            Gui.drawRect(pLeft, pTop, pLeft + SelectorLayout.NAV_ARROW_WIDTH, pTop + 1, 0xFFFFFFFF);
-            Gui.drawRect(pLeft, pTop, pLeft + 1, pBottom, 0xFFFFFFFF);
-            Gui.drawRect(pLeft, pBottom - 1, pLeft + SelectorLayout.NAV_ARROW_WIDTH, pBottom, 0xFF555555);
-            Gui.drawRect(pLeft + SelectorLayout.NAV_ARROW_WIDTH - 1, pTop, pLeft + SelectorLayout.NAV_ARROW_WIDTH, pBottom, 0xFF555555);
-            Gui.drawRect(pLeft, pTop, pLeft + SelectorLayout.NAV_ARROW_WIDTH, pTop + 1, 0xFF000000);
-            Gui.drawRect(pLeft, pBottom - 1, pLeft + SelectorLayout.NAV_ARROW_WIDTH, pBottom, 0xFF000000);
-            Gui.drawRect(pLeft, pTop, pLeft + 1, pBottom, 0xFF000000);
-            mc.fontRenderer.drawStringWithShadow("<", pLeft + 4, pTop + 8, leftHover ? 0xFFFFA0 : 0xFFFFFFFF);
-
-            // Right navigation arrow button
-            int rightBg = rightHover ? 0xFFD8D8D8 : 0xFFC6C6C6;
-            Gui.drawRect(pRight - SelectorLayout.NAV_ARROW_WIDTH, pTop, pRight, pBottom, rightBg);
-            Gui.drawRect(pRight - SelectorLayout.NAV_ARROW_WIDTH, pTop, pRight, pTop + 1, 0xFFFFFFFF);
-            Gui.drawRect(pRight - SelectorLayout.NAV_ARROW_WIDTH, pTop, pRight - SelectorLayout.NAV_ARROW_WIDTH + 1, pBottom, 0xFFFFFFFF);
-            Gui.drawRect(pRight - SelectorLayout.NAV_ARROW_WIDTH, pBottom - 1, pRight, pBottom, 0xFF555555);
-            Gui.drawRect(pRight - 1, pTop, pRight, pBottom, 0xFF555555);
-            Gui.drawRect(pRight - SelectorLayout.NAV_ARROW_WIDTH, pTop, pRight, pTop + 1, 0xFF000000);
-            Gui.drawRect(pRight - SelectorLayout.NAV_ARROW_WIDTH, pBottom - 1, pRight, pBottom, 0xFF000000);
-            Gui.drawRect(pRight - 1, pTop, pRight, pBottom, 0xFF000000);
-            mc.fontRenderer.drawStringWithShadow(">", pRight - 8, pTop + 8, rightHover ? 0xFFFFA0 : 0xFFFFFFFF);
-        }
-
-        int hoveredIndex = this.layout.choiceAt(mouseX, mouseY);
-        if (hoveredIndex >= 0 && hoveredIndex < choices.size()) {
-            RecipeOption hovered = choices.get(hoveredIndex);
-            drawRecipeTooltip(mc, hovered, selected, mouseX, mouseY);
+    private static void playSelectionSound(Minecraft mc) {
+        if (mc != null && mc.getSoundHandler() != null) {
+            mc.getSoundHandler().playSound(
+                    PositionedSoundRecord.getMasterRecord(SoundEvents.UI_BUTTON_CLICK, 1.0F));
         }
     }
 
-    private void drawRecipeTooltip(
-            Minecraft mc,
-            RecipeOption choice,
-            String selected,
-            int mouseX,
-            int mouseY) {
-        ItemStack output = choice.getOutput();
-        this.tooltipLines.clear();
-        this.tooltipLines.add(output.isEmpty() ? "<empty output>" : output.getDisplayName());
-        if (selected != null && selected.equals(choice.getRecipeKey())) {
-            this.tooltipLines.add("\u00a7a" + I18n.format("retropolymorph.selector.selected"));
+    private static int indexOfRecipeKey(List<RecipeOption> choices, String recipeKey) {
+        if (recipeKey == null || choices == null) {
+            return -1;
         }
-        if (this.showRecipeKeyInTooltip) {
-            this.tooltipLines.add("\u00a78" + choice.getRecipeKey());
+        for (int index = 0; index < choices.size(); index++) {
+            RecipeOption option = choices.get(index);
+            if (option != null && recipeKey.equals(option.getRecipeKey())) {
+                return index;
+            }
         }
-        GuiUtils.drawHoveringText(
-                output,
-                this.tooltipLines,
-                mouseX,
-                mouseY,
-                this.gui.width,
-                this.gui.height,
-                -1,
-                mc.fontRenderer);
-    }
-
-    private void drawButtonTooltip(Minecraft mc, int mouseX, int mouseY) {
-        int windowId = this.context.getContainer().windowId;
-        String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
-
-        this.tooltipLines.clear();
-        this.tooltipLines.add(I18n.format(
-                "retropolymorph.selector.tooltip",
-                Integer.valueOf(this.cache.getChoices().size())));
-        if (!ClientSelectionTracker.wasLastAccepted(windowId, this.sessionToken)) {
-            this.tooltipLines.add("\u00a7c" + I18n.format("retropolymorph.selector.rejected"));
-        } else if (selected != null) {
-            this.tooltipLines.add("\u00a7a" + I18n.format("retropolymorph.selector.selected"));
-        }
-        if (this.rightClickClears && selected != null) {
-            this.tooltipLines.add("\u00a77" + I18n.format("retropolymorph.selector.reset"));
-        }
-        GuiUtils.drawHoveringText(
-                ItemStack.EMPTY,
-                this.tooltipLines,
-                mouseX,
-                mouseY,
-                this.gui.width,
-                this.gui.height,
-                -1,
-                mc.fontRenderer);
+        return -1;
     }
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(value, max));
     }
 
+    private String describeInputs() {
+        StringBuilder inputs = new StringBuilder();
+        for (int index = 0; index < this.context.getInputCount(); index++) {
+            ItemStack stack = this.context.getInputStack(index);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (inputs.length() > 0) {
+                inputs.append(';');
+            }
+            inputs.append(index).append('=')
+                    .append(stack.getItem().getRegistryName())
+                    .append('@').append(stack.getMetadata())
+                    .append('x').append(stack.getCount());
+        }
+        return inputs.length() == 0 ? "empty" : inputs.toString();
+    }
+
+
+    private static int nextInputRevision(int current) {
+        return current == Integer.MAX_VALUE ? 1 : current + 1;
+    }
     private static boolean contains(int mouseX, int mouseY, int x, int y, int width, int height) {
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }

@@ -4,21 +4,14 @@ import dev.sosea1.retropolymorph.api.RecipeOption;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.core.SelectionContextDetector;
 import dev.sosea1.retropolymorph.network.NetworkHandler;
-import net.minecraft.client.Minecraft;
 import net.minecraft.inventory.Container;
 import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Short-lived client intent captured from a successful JEI recipe transfer.
- *
- * It is bound to the actual Container object, not to a GUI session token,
- * because JEI temporarily replaces the GuiContainer with its RecipesGui.
- */
+/** Short-lived intent captured from a successful JEI recipe transfer. */
 public final class JeiTransferIntent {
 
     private static final long MAX_AGE_NANOS = 10_000_000_000L;
@@ -27,59 +20,48 @@ public final class JeiTransferIntent {
     private static Container targetContainer;
     private static ItemStack[] beforeInputs = new ItemStack[0];
     private static List<ItemStack> intendedOutputs = Collections.emptyList();
-    private static boolean safeWithoutInputChange;
+    private static String intendedRecipeKey;
     private static long createdAtNanos;
 
     private JeiTransferIntent() {
     }
 
-    public static void capture(Container container, List<ItemStack> outputs) {
-        if (container == null || outputs == null || outputs.isEmpty()) {
+    public static void capture(Container container, String recipeKey, List<ItemStack> outputs) {
+        if (container == null || (recipeKey == null && (outputs == null || outputs.isEmpty()))) {
             clear();
             return;
         }
 
         ArrayList<ItemStack> unique = new ArrayList<ItemStack>();
-        for (ItemStack output : outputs) {
-            if (output == null || output.isEmpty() || containsStack(unique, output)) {
-                continue;
-            }
-            unique.add(output.copy());
-            if (unique.size() >= MAX_OUTPUT_VARIANTS) {
-                break;
+        if (outputs != null) {
+            for (ItemStack output : outputs) {
+                if (output == null || output.isEmpty() || containsStack(unique, output)) {
+                    continue;
+                }
+                unique.add(output.copy());
+                if (unique.size() >= MAX_OUTPUT_VARIANTS) {
+                    break;
+                }
             }
         }
-        if (unique.isEmpty()) {
+        if (recipeKey == null && unique.isEmpty()) {
             clear();
             return;
         }
 
-        SelectionContext context = SelectionContextDetector.detect(container);
         targetContainer = container;
+        intendedRecipeKey = recipeKey;
         intendedOutputs = Collections.unmodifiableList(unique);
         createdAtNanos = System.nanoTime();
-        safeWithoutInputChange = false;
-
-        if (context == null) {
-            beforeInputs = new ItemStack[0];
-            return;
-        }
-
-        beforeInputs = snapshot(context);
-        Minecraft mc = Minecraft.getMinecraft();
-        World world = mc.world;
-        if (world != null) {
-            List<RecipeOption> choices = ClientRecipeCache.sanitizeOptions(
-                    context.findOptions(world));
-            Match match = findMatch(choices, intendedOutputs);
-            safeWithoutInputChange = match.option != null && !match.ambiguous;
-        }
+        SelectionContext context = SelectionContextDetector.detect(container);
+        beforeInputs = context == null ? new ItemStack[0] : snapshot(context);
     }
 
     static boolean tryApply(
             SelectionContext context,
             List<RecipeOption> choices,
-            int sessionToken) {
+            int sessionToken,
+            int inputRevision) {
         if (targetContainer == null) {
             return false;
         }
@@ -88,20 +70,26 @@ public final class JeiTransferIntent {
             return false;
         }
 
-        boolean inputChanged = !snapshotMatches(context, beforeInputs);
-        if (!safeWithoutInputChange && !inputChanged) {
+        Match match = findMatch(choices, intendedRecipeKey, intendedOutputs);
+        if (match.ambiguous) {
+            clear();
+            return false;
+        }
+        if (match.option == null) {
+            // A first reply can still describe the pre-transfer input. Once the
+            // client matrix has actually changed, a server snapshot without the
+            // intended output is authoritative and the intent can be dropped.
+            if (beforeInputs.length > 0 && !snapshotMatches(context, beforeInputs)) {
+                clear();
+            }
             return false;
         }
 
-        Match match = findMatch(choices, intendedOutputs);
         clear();
-        if (match.ambiguous || match.option == null) {
-            return false;
-        }
-
         NetworkHandler.select(
                 context.getContainer().windowId,
                 sessionToken,
+                inputRevision,
                 match.option.getRecipeKey());
         return true;
     }
@@ -116,7 +104,7 @@ public final class JeiTransferIntent {
         targetContainer = null;
         beforeInputs = new ItemStack[0];
         intendedOutputs = Collections.emptyList();
-        safeWithoutInputChange = false;
+        intendedRecipeKey = null;
         createdAtNanos = 0L;
     }
 
@@ -146,7 +134,21 @@ public final class JeiTransferIntent {
         return true;
     }
 
-    private static Match findMatch(List<RecipeOption> choices, List<ItemStack> outputs) {
+    private static Match findMatch(
+            List<RecipeOption> choices,
+            String recipeKey,
+            List<ItemStack> outputs) {
+        if (recipeKey != null) {
+            for (RecipeOption choice : choices) {
+                if (recipeKey.equals(choice.getRecipeKey())) {
+                    return new Match(choice, false);
+                }
+            }
+            // An exact JEI identity is stronger than output equality. Falling
+            // back to output here could select a different conflicting recipe.
+            return Match.NONE;
+        }
+
         RecipeOption found = null;
         for (RecipeOption choice : choices) {
             if (!containsStack(outputs, choice.getOutput())) {

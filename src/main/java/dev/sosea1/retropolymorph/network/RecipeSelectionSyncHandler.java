@@ -9,11 +9,6 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 
 import javax.annotation.Nullable;
 
-/**
- * Client acknowledgement handler. Scheduling goes through Forge's common
- * IThreadListener lookup so this class does not reference Minecraft's client
- * implementation directly.
- */
 public final class RecipeSelectionSyncHandler
         implements IMessageHandler<RecipeSelectionSyncMessage, IMessage> {
 
@@ -24,7 +19,6 @@ public final class RecipeSelectionSyncHandler
             return null;
         }
 
-        final String selected = message.getSelectedRecipeKey();
         IThreadListener thread = FMLCommonHandler.instance().getWorldThread(context.netHandler);
         thread.addScheduledTask(new Runnable() {
             @Override
@@ -32,8 +26,11 @@ public final class RecipeSelectionSyncHandler
                 ClientSelectionTracker.apply(
                         message.getWindowId(),
                         message.getSessionToken(),
+                        message.getInputRevision(),
                         message.isAccepted(),
-                        selected);
+                        message.getSelectedRecipeKey(),
+                        message.getOptions(),
+                        message.getReason());
             }
         });
         return null;

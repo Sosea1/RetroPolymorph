@@ -8,10 +8,10 @@ import javax.annotation.Nullable;
 
 /**
  * C2S request for selecting, clearing, or querying the current recipe choice.
- * Recipe keys are intentionally opaque to the transport layer.
  *
- * The client session token distinguishes consecutive GUI lifetimes that may
- * reuse the same vanilla window id (notably the player inventory at window 0).
+ * inputRevision is a client-local generation number for the visible input
+ * snapshot. It is echoed by the server so late replies for an older matrix can
+ * be ignored without trusting the client for any recipe calculation.
  */
 public final class RecipeSelectionMessage implements IMessage {
 
@@ -21,6 +21,7 @@ public final class RecipeSelectionMessage implements IMessage {
 
     private int windowId;
     private int sessionToken;
+    private int inputRevision;
     private byte operation;
     private boolean valid = true;
 
@@ -33,10 +34,12 @@ public final class RecipeSelectionMessage implements IMessage {
     private RecipeSelectionMessage(
             int windowId,
             int sessionToken,
+            int inputRevision,
             byte operation,
             @Nullable String recipeKey) {
         this.windowId = windowId;
         this.sessionToken = sessionToken;
+        this.inputRevision = inputRevision;
         this.operation = operation;
         this.recipeKey = recipeKey;
     }
@@ -44,6 +47,7 @@ public final class RecipeSelectionMessage implements IMessage {
     public static RecipeSelectionMessage select(
             int windowId,
             int sessionToken,
+            int inputRevision,
             String recipeKey) {
         if (recipeKey == null) {
             throw new NullPointerException("recipeKey");
@@ -51,15 +55,24 @@ public final class RecipeSelectionMessage implements IMessage {
         if (!RecipeKey.isWireSafe(recipeKey)) {
             throw new IllegalArgumentException("recipeKey is not wire-safe");
         }
-        return new RecipeSelectionMessage(windowId, sessionToken, OP_SELECT, recipeKey);
+        return new RecipeSelectionMessage(
+                windowId, sessionToken, inputRevision, OP_SELECT, recipeKey);
     }
 
-    public static RecipeSelectionMessage clear(int windowId, int sessionToken) {
-        return new RecipeSelectionMessage(windowId, sessionToken, OP_CLEAR, null);
+    public static RecipeSelectionMessage clear(
+            int windowId,
+            int sessionToken,
+            int inputRevision) {
+        return new RecipeSelectionMessage(
+                windowId, sessionToken, inputRevision, OP_CLEAR, null);
     }
 
-    public static RecipeSelectionMessage query(int windowId, int sessionToken) {
-        return new RecipeSelectionMessage(windowId, sessionToken, OP_QUERY, null);
+    public static RecipeSelectionMessage query(
+            int windowId,
+            int sessionToken,
+            int inputRevision) {
+        return new RecipeSelectionMessage(
+                windowId, sessionToken, inputRevision, OP_QUERY, null);
     }
 
     public int getWindowId() {
@@ -68,6 +81,10 @@ public final class RecipeSelectionMessage implements IMessage {
 
     public int getSessionToken() {
         return this.sessionToken;
+    }
+
+    public int getInputRevision() {
+        return this.inputRevision;
     }
 
     public boolean isSelect() {
@@ -93,13 +110,14 @@ public final class RecipeSelectionMessage implements IMessage {
 
     @Override
     public void fromBytes(ByteBuf buf) {
-        if (buf.readableBytes() < 9) {
+        if (buf.readableBytes() < 13) {
             invalidate();
             return;
         }
 
         this.windowId = buf.readInt();
         this.sessionToken = buf.readInt();
+        this.inputRevision = buf.readInt();
         this.operation = buf.readByte();
         if (this.operation < OP_SELECT || this.operation > OP_QUERY) {
             invalidate();
@@ -125,6 +143,7 @@ public final class RecipeSelectionMessage implements IMessage {
     public void toBytes(ByteBuf buf) {
         buf.writeInt(this.windowId);
         buf.writeInt(this.sessionToken);
+        buf.writeInt(this.inputRevision);
         buf.writeByte(this.operation);
         if (this.operation != OP_SELECT) {
             return;

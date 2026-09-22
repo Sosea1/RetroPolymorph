@@ -18,11 +18,21 @@ public interface SelectionContext {
 
     Container getContainer();
 
+    @Nullable
     Slot getResultSlot();
 
     int getInputCount();
 
     ItemStack getInputStack(int index);
+
+    /**
+     * Cheap client-visible state that affects recipe availability without
+     * necessarily changing the input stacks (for example a terminal mode).
+     * Returning a different value invalidates the authoritative option snapshot.
+     */
+    default int getClientStateToken() {
+        return 0;
+    }
 
     List<RecipeOption> findOptions(World world);
 
@@ -50,11 +60,19 @@ public interface SelectionContext {
     default void applyRemoteSelection(@Nullable String recipeKey) {
     }
 
-    default int getButtonOffsetX() {
-        return 0;
+    default SelectionPersistencePolicy getPersistencePolicy() {
+        return SelectionPersistencePolicy.PLAYER_PERSISTENT;
     }
 
-    default int getButtonOffsetY() {
-        return 0;
+    default SelectorPlacement getSelectorPlacement() {
+        Slot result = getResultSlot();
+        return result != null
+                ? SelectorPlacement.resultSlot(result.xPos, result.yPos, 0, 0)
+                : SelectorPlacement.hidden();
+    }
+
+    default SelectionScope getSelectionScope() {
+        return SelectionScope.local();
     }
 }
+

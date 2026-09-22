@@ -45,10 +45,29 @@ public class PolymorphButton extends GuiButton {
                 GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ZERO);
 
-        ResourceLocation tex = (this.hovered || this.hasSelection) ? TEXTURE_HIGHLIGHTED : TEXTURE_NORMAL;
+        ResourceLocation tex = this.hovered ? TEXTURE_HIGHLIGHTED : TEXTURE_NORMAL;
         mc.getTextureManager().bindTexture(tex);
         Gui.drawModalRectWithCustomSizedTexture(this.x, this.y, 0, 0, this.width, this.height, 16, 16);
 
+        // A selected recipe must not look permanently hovered. Keep the normal
+        // button sprite and use a tiny top-right status dot instead:
+        // green = explicit selection, red = server rejected/invalidated the
+        // last action.
+        if (this.errorState) {
+            drawStatusCorner(0xFFE14B4B);
+        } else if (this.hasSelection) {
+            drawStatusCorner(0xFF55E39A);
+        }
+
         GlStateManager.disableBlend();
+    }
+
+    private void drawStatusCorner(int color) {
+        final int outerLeft = this.x + 12;
+        final int outerTop = this.y;
+        final int outerRight = this.x + 16;
+        final int outerBottom = this.y + 4;
+        Gui.drawRect(outerLeft, outerTop, outerRight, outerBottom, 0xFF101010);
+        Gui.drawRect(outerLeft + 1, outerTop + 1, outerRight - 1, outerBottom - 1, color);
     }
 }

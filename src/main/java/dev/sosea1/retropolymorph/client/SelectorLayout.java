@@ -1,17 +1,23 @@
 package dev.sosea1.retropolymorph.client;
 
+import dev.sosea1.retropolymorph.config.SelectorMode;
+
 /**
- * Clean, compact 1-row horizontal selector layout.
+ * One-row recipe selector layout with two intentionally different UX modes.
  *
- * Displays up to 5 recipe cells at a time. If there are more than 5 choices,
- * compact left (<) and right (>) navigation arrows are rendered inline on the sides,
- * with smooth scroll/paging support.
+ * COMPACT is RetroPolymorph's default: at most five recipe cells are visible and
+ * larger conflict sets are navigated with inline arrows or the mouse wheel.
+ * CLASSIC mirrors upstream Polymorph: every authoritative option (server-capped
+ * at 15) is displayed in one centered strip when it fits. On narrow scaled
+ * screens it degrades to a navigable viewport instead of rendering off-screen.
  */
 final class SelectorLayout {
 
     static final int CELL_SIZE = 25;
-    static final int MAX_VISIBLE = 5;
+    static final int COMPACT_VISIBLE = 5;
     static final int NAV_ARROW_WIDTH = 12;
+
+    private final SelectorMode mode;
 
     private int offset;
     private int visibleCount;
@@ -23,7 +29,12 @@ final class SelectorLayout {
     private int panelRight;
     private int panelBottom;
 
-    SelectorLayout(int configuredColumns, int configuredRows) {
+    SelectorLayout(SelectorMode mode) {
+        this.mode = mode == null ? SelectorMode.COMPACT : mode;
+    }
+
+    SelectorMode getMode() {
+        return this.mode;
     }
 
     void resetPage() {
@@ -39,19 +50,37 @@ final class SelectorLayout {
             int buttonHeight,
             int choices) {
         this.choiceCount = Math.max(0, choices);
-        this.hasNav = this.choiceCount > MAX_VISIBLE;
-        this.visibleCount = this.hasNav ? MAX_VISIBLE : Math.max(1, this.choiceCount);
 
-        clampOffset();
+        int fullStripCapacity = maxVisibleCells(guiWidth, false);
+        if (this.mode == SelectorMode.CLASSIC && this.choiceCount <= fullStripCapacity) {
+            this.hasNav = false;
+            this.offset = 0;
+            this.visibleCount = Math.max(1, this.choiceCount);
+        } else {
+            int preferredVisible = this.mode == SelectorMode.CLASSIC
+                    ? this.choiceCount
+                    : Math.min(COMPACT_VISIBLE, Math.max(1, this.choiceCount));
+            int noNavVisible = Math.min(preferredVisible, fullStripCapacity);
+            this.hasNav = this.choiceCount > noNavVisible;
+            if (this.hasNav) {
+                this.visibleCount = Math.min(
+                        preferredVisible,
+                        maxVisibleCells(guiWidth, true));
+            } else {
+                this.visibleCount = Math.max(1, this.choiceCount);
+                this.offset = 0;
+            }
+            clampOffset();
+        }
 
         int width = (this.hasNav ? NAV_ARROW_WIDTH * 2 : 0) + this.visibleCount * CELL_SIZE;
         int height = CELL_SIZE;
 
-        // Center on the button
+        // Both modes are centered on the selector button, matching upstream's
+        // horizontal selection strip while letting COMPACT reserve arrow space.
         int left = buttonX + (buttonWidth / 2) - (width / 2);
         left = clamp(left, 2, Math.max(2, guiWidth - width - 2));
 
-        // Position above the button (-28px default offset); flip below if overflowing top
         int top = buttonY - height - 4;
         if (top < 2) {
             top = buttonY + buttonHeight + 4;
@@ -67,13 +96,61 @@ final class SelectorLayout {
         this.panelBottom = top + height;
     }
 
-    void moveOffset(int direction) {
+    int getMaxOffset() {
+        return Math.max(0, this.choiceCount - this.visibleCount);
+    }
+
+    boolean canMoveLeft() {
+        return this.hasNav && this.offset > 0;
+    }
+
+    boolean canMoveRight() {
+        return this.hasNav && this.offset < getMaxOffset();
+    }
+
+    void pageLeft() {
         if (!this.hasNav) {
             this.offset = 0;
             return;
         }
+        if (this.offset == getMaxOffset() && this.offset % this.visibleCount != 0) {
+            this.offset = (this.offset / this.visibleCount) * this.visibleCount;
+        } else {
+            this.offset = Math.max(0, this.offset - this.visibleCount);
+        }
+    }
 
+    void pageRight() {
+        if (!this.hasNav) {
+            this.offset = 0;
+            return;
+        }
+        this.offset = Math.min(getMaxOffset(), this.offset + this.visibleCount);
+    }
+
+    void scrollWheel(int direction) {
+        if (!this.hasNav) {
+            this.offset = 0;
+            return;
+        }
         this.offset += direction;
+        clampOffset();
+    }
+
+    void moveOffset(int direction) {
+        scrollWheel(direction);
+    }
+
+    /** Keep a selected/focused recipe visible whenever the layout uses a viewport. */
+    void ensureVisible(int absoluteChoiceIndex) {
+        if (!this.hasNav || absoluteChoiceIndex < 0 || absoluteChoiceIndex >= this.choiceCount) {
+            return;
+        }
+        if (absoluteChoiceIndex < this.offset) {
+            this.offset = absoluteChoiceIndex;
+        } else if (absoluteChoiceIndex >= this.offset + this.visibleCount) {
+            this.offset = absoluteChoiceIndex - this.visibleCount + 1;
+        }
         clampOffset();
     }
 
@@ -82,11 +159,11 @@ final class SelectorLayout {
             this.offset = 0;
             return;
         }
-        int maxOffset = Math.max(0, this.choiceCount - MAX_VISIBLE);
+        int maxOffset = getMaxOffset();
         if (this.offset < 0) {
-            this.offset = maxOffset;
-        } else if (this.offset > maxOffset) {
             this.offset = 0;
+        } else if (this.offset > maxOffset) {
+            this.offset = maxOffset;
         }
     }
 
@@ -142,6 +219,10 @@ final class SelectorLayout {
         return this.panelTop;
     }
 
+    int getVisibleCount() {
+        return this.visibleCount;
+    }
+
     int getStartIndex() {
         return this.offset;
     }
@@ -168,6 +249,13 @@ final class SelectorLayout {
 
     int getPanelBottom() {
         return this.panelBottom;
+    }
+
+
+    private static int maxVisibleCells(int guiWidth, boolean withNavigation) {
+        int reserved = 4 + (withNavigation ? NAV_ARROW_WIDTH * 2 : 0);
+        int available = Math.max(CELL_SIZE, guiWidth - reserved);
+        return Math.max(1, available / CELL_SIZE);
     }
 
     private static int clamp(int value, int min, int max) {

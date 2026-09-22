@@ -1,73 +1,57 @@
 package dev.sosea1.retropolymorph.client;
 
-import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeOption;
+import dev.sosea1.retropolymorph.api.RecipeOptions;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import net.minecraft.item.ItemStack;
-import net.minecraft.world.World;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/** Client-side input snapshot plus the last server-authoritative options. */
 final class ClientRecipeCache {
 
     private SelectionContext context;
-    private World world;
+    private int stateToken;
     private ItemStack[] snapshot = new ItemStack[0];
     private List<RecipeOption> choices = Collections.emptyList();
 
-    boolean refresh(SelectionContext currentContext, World world) {
+    boolean refreshInputs(SelectionContext currentContext) {
         if (this.context == currentContext
-                && this.world == world
+                && this.stateToken == currentContext.getClientStateToken()
                 && snapshotMatches(currentContext)) {
             return false;
         }
 
         this.context = currentContext;
-        this.world = world;
+        this.stateToken = currentContext.getClientStateToken();
         captureSnapshot(currentContext);
-        this.choices = sanitizeOptions(currentContext.findOptions(world));
         return true;
+    }
+
+    boolean setChoices(List<RecipeOption> options, String selectedRecipeKey) {
+        List<RecipeOption> sanitized = RecipeOptions.sanitizeAndLimit(
+                options, selectedRecipeKey);
+        if (sameChoices(this.choices, sanitized)) {
+            return false;
+        }
+        this.choices = sanitized;
+        return true;
+    }
+
+    void clearChoices() {
+        this.choices = Collections.emptyList();
     }
 
     List<RecipeOption> getChoices() {
         return this.choices;
     }
 
-    void invalidate() {
+    void invalidateInputs() {
         this.context = null;
-        this.world = null;
+        this.stateToken = 0;
     }
 
-    static List<RecipeOption> sanitizeOptions(List<RecipeOption> options) {
-        if (options == null || options.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        ArrayList<RecipeOption> sanitized = null;
-        for (int index = 0; index < options.size(); index++) {
-            RecipeOption option = options.get(index);
-            boolean valid = option != null
-                    && RecipeKey.isWireSafe(option.getRecipeKey())
-                    && !option.getOutput().isEmpty();
-            if (valid) {
-                if (sanitized != null) {
-                    sanitized.add(option);
-                }
-                continue;
-            }
-
-            if (sanitized == null) {
-                sanitized = new ArrayList<RecipeOption>(options.size() - 1);
-                for (int previous = 0; previous < index; previous++) {
-                    sanitized.add(options.get(previous));
-                }
-            }
-        }
-
-        return sanitized == null ? options : sanitized;
-    }
 
     private boolean snapshotMatches(SelectionContext currentContext) {
         int size = currentContext.getInputCount();
@@ -95,5 +79,23 @@ final class ClientRecipeCache {
             ItemStack stack = currentContext.getInputStack(slot);
             this.snapshot[slot] = stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
         }
+    }
+
+    private static boolean sameChoices(List<RecipeOption> first, List<RecipeOption> second) {
+        if (first == second) {
+            return true;
+        }
+        if (first.size() != second.size()) {
+            return false;
+        }
+        for (int index = 0; index < first.size(); index++) {
+            RecipeOption a = first.get(index);
+            RecipeOption b = second.get(index);
+            if (!a.getRecipeKey().equals(b.getRecipeKey())
+                    || !ItemStack.areItemStacksEqual(a.getOutput(), b.getOutput())) {
+                return false;
+            }
+        }
+        return true;
     }
 }

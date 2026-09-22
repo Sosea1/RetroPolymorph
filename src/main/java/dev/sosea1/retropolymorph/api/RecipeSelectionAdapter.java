@@ -2,16 +2,22 @@ package dev.sosea1.retropolymorph.api;
 
 import net.minecraft.inventory.Container;
 
-import javax.annotation.Nullable;
-
 /**
- * Optional compatibility hook for focused recipe-selection surfaces that do
- * not fit the generic crafting/furnace detectors.
+ * Compatibility hook for focused recipe-selection surfaces that do
+ * not fit generic crafting/furnace detectors.
  *
- * Adapters should be cheap to probe and return null for unrelated containers.
+ * <p>Adapters should be cheap to probe and return {@link AdapterDetectionResult#miss()}
+ * for unrelated containers.</p>
  */
+@FunctionalInterface
 public interface RecipeSelectionAdapter {
 
-    @Nullable
-    SelectionContext createContext(Container container);
+    /**
+     * Probes this container and returns an atomic verdict: MATCH with context,
+     * BLOCK_FALLBACK to suppress generic detection, or MISS.
+     *
+     * @param container the open container to inspect
+     * @return atomic detection verdict; never null
+     */
+    AdapterDetectionResult probe(Container container);
 }

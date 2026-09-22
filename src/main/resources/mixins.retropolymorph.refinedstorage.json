@@ -1,0 +1,18 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "dev.sosea1.retropolymorph.mixin.compat.refinedstorage",
+  "refmap": "mixins.retropolymorph.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [
+    "RefinedStorageContainerGridMixin",
+    "RefinedStorageNetworkNodeGridMixin",
+    "RefinedStorageCraftingPatternMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

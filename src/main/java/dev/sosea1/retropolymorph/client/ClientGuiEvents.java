@@ -1,30 +1,47 @@
 package dev.sosea1.retropolymorph.client;
 
-import dev.sosea1.retropolymorph.Tags;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import dev.sosea1.retropolymorph.core.SelectionContextDetector;
+import dev.sosea1.retropolymorph.diagnostic.CraftingDetectionDiagnostics;
 import dev.sosea1.retropolymorph.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.inventory.Slot;
+import net.minecraft.inventory.SlotFurnaceOutput;
+import net.minecraft.tileentity.TileEntityFurnace;
 import net.minecraftforge.client.event.GuiOpenEvent;
 import net.minecraftforge.client.event.GuiScreenEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.relauncher.Side;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Forge-event integration keeps GUI compatibility logic out of core Mixins.
  */
-@Mod.EventBusSubscriber(value = Side.CLIENT, modid = Tags.MOD_ID)
 public final class ClientGuiEvents {
+
+    private static final Logger LOGGER = LogManager.getLogger("Retro Polymorph");
+
+    private static final Class<?> MANTLE_GUI_MODULE_CLASS;
+
+    static {
+        Class<?> clazz = null;
+        try {
+            clazz = Class.forName("slimeknights.mantle.client.gui.GuiModule");
+        } catch (ClassNotFoundException | LinkageError ignored) {
+        }
+        MANTLE_GUI_MODULE_CLASS = clazz;
+    }
 
     private static RecipeSelectorController controller;
 
-    private ClientGuiEvents() {
+    public ClientGuiEvents() {
     }
 
     public static RecipeSelectorController getActiveController() {
@@ -32,16 +49,36 @@ public final class ClientGuiEvents {
     }
 
     @SubscribeEvent
-    public static void onGuiOpen(GuiOpenEvent event) {
+    public void onGuiOpen(GuiOpenEvent event) {
         controller = null;
         ClientSelectionTracker.reset();
+        SelectorQueryScheduler.cancel();
     }
 
     @SubscribeEvent
-    public static void onInitGui(GuiScreenEvent.InitGuiEvent.Post event) {
+    public void onClientDisconnect(net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
+        controller = null;
+        ClientSelectionTracker.reset();
+        SelectorQueryScheduler.cancel();
+    }
+
+    @SubscribeEvent
+    public void onClientTick(net.minecraftforge.fml.common.gameevent.TickEvent.ClientTickEvent event) {
+        if (event.phase == net.minecraftforge.fml.common.gameevent.TickEvent.Phase.END) {
+            SelectorQueryScheduler.onTickEnd();
+        }
+    }
+
+    @SubscribeEvent
+    public void onInitGui(GuiScreenEvent.InitGuiEvent.Post event) {
         GuiScreen screen = event.getGui();
         if (!(screen instanceof GuiContainer)) {
             controller = null;
+            return;
+        }
+
+        Minecraft mc = Minecraft.getMinecraft();
+        if (screen != mc.currentScreen || (MANTLE_GUI_MODULE_CLASS != null && MANTLE_GUI_MODULE_CLASS.isInstance(screen))) {
             return;
         }
 
@@ -54,7 +91,24 @@ public final class ClientGuiEvents {
         GuiContainer gui = (GuiContainer) screen;
         JeiTransferIntent.discardIfDifferent(gui.inventorySlots);
         SelectionContext context = SelectionContextDetector.detect(gui.inventorySlots);
-        if (context == null || context.getResultSlot() == null) {
+        if (context == null || !context.getSelectorPlacement().isVisible()) {
+            if (LOGGER.isDebugEnabled()) {
+                CraftingDetectionDiagnostics.Report report =
+                        CraftingDetectionDiagnostics.inspect(gui.inventorySlots);
+                LOGGER.debug(
+                        "GUI probe unsupported: gui={}, container={}, route={}, slots={}, slotCrafting={}, "
+                                + "accessors={}, matrices={}, resultInventories={}, detail={}, furnaceSlots={}",
+                        gui.getClass().getName(),
+                        report.containerClass,
+                        report.route,
+                        report.totalSlots,
+                        report.slotCraftingCount,
+                        report.slotCraftingAccessorCount,
+                        report.craftingMatrixCount,
+                        report.resultInventoryCount,
+                        report.detail,
+                        describeFurnaceSlots(gui));
+            }
             controller = null;
             JeiTransferIntent.clear();
             return;
@@ -62,6 +116,12 @@ public final class ClientGuiEvents {
 
         int windowId = context.getContainer().windowId;
         int sessionToken = ClientSelectionTracker.begin(windowId);
+        LOGGER.debug(
+                "GUI probe supported: gui={}, container={}, context={}, window={}",
+                gui.getClass().getName(),
+                context.getContainer().getClass().getName(),
+                context.getClass().getName(),
+                Integer.valueOf(windowId));
 
         RecipeSelectorController created = new RecipeSelectorController(
                 gui,
@@ -70,12 +130,11 @@ public final class ClientGuiEvents {
         event.getButtonList().add(created.getButton());
         controller = created;
 
-        NetworkHandler.query(windowId, sessionToken);
         created.update();
     }
 
     @SubscribeEvent
-    public static void onAction(GuiScreenEvent.ActionPerformedEvent.Pre event) {
+    public void onAction(GuiScreenEvent.ActionPerformedEvent.Pre event) {
         RecipeSelectorController current = controller;
         if (current == null || !(event.getGui() instanceof GuiContainer)) {
             return;
@@ -93,7 +152,7 @@ public final class ClientGuiEvents {
     }
 
     @SubscribeEvent
-    public static void onDrawPre(GuiScreenEvent.DrawScreenEvent.Pre event) {
+    public void onDrawPre(GuiScreenEvent.DrawScreenEvent.Pre event) {
         RecipeSelectorController current = controller;
         if (current == null || !(event.getGui() instanceof GuiContainer)) {
             return;
@@ -106,8 +165,8 @@ public final class ClientGuiEvents {
         current.update();
     }
 
-    @SubscribeEvent
-    public static void onDrawPost(GuiScreenEvent.DrawScreenEvent.Post event) {
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onDrawPost(GuiScreenEvent.DrawScreenEvent.Post event) {
         RecipeSelectorController current = controller;
         if (current == null || !(event.getGui() instanceof GuiContainer)) {
             return;
@@ -121,7 +180,24 @@ public final class ClientGuiEvents {
     }
 
     @SubscribeEvent
-    public static void onMouseInput(GuiScreenEvent.MouseInputEvent.Pre event) {
+    public void onKeyboardInput(GuiScreenEvent.KeyboardInputEvent.Pre event) {
+        if (!(event.getGui() instanceof GuiContainer)) {
+            return;
+        }
+        if (!Keyboard.getEventKeyState()) {
+            return;
+        }
+
+        GuiContainer gui = (GuiContainer) event.getGui();
+        int keyCode = Keyboard.getEventKey();
+        RecipeSelectorController current = controller;
+        if (current != null && current.owns(gui) && current.handleKeyboardInput(keyCode)) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void onMouseInput(GuiScreenEvent.MouseInputEvent.Pre event) {
         RecipeSelectorController current = controller;
         if (current == null || !(event.getGui() instanceof GuiContainer)) {
             return;
@@ -141,22 +217,25 @@ public final class ClientGuiEvents {
 
         if (current.handleMouseInput(mouseX, mouseY, button, pressed, wheel)) {
             event.setCanceled(true);
-            return;
-        }
-
-        // Right-click button to reset selection
-        if (pressed && button == 1 && current.isRightClickClearEnabled()
-                && current.getButton().visible
-                && contains(current.getButton(), mouseX, mouseY)) {
-            current.clearSelection();
-            event.setCanceled(true);
         }
     }
 
-    private static boolean contains(GuiButton button, int mouseX, int mouseY) {
-        return mouseX >= button.x
-                && mouseX < button.x + button.width
-                && mouseY >= button.y
-                && mouseY < button.y + button.height;
+    private static String describeFurnaceSlots(GuiContainer gui) {
+        StringBuilder details = new StringBuilder();
+        for (Slot slot : gui.inventorySlots.inventorySlots) {
+            if (!(slot instanceof SlotFurnaceOutput)) {
+                continue;
+            }
+            if (details.length() > 0) {
+                details.append(';');
+            }
+            details.append("slotClass=").append(slot.getClass().getName())
+                    .append(",slotIndex=").append(slot.getSlotIndex())
+                    .append(",inventoryClass=").append(slot.inventory.getClass().getName())
+                    .append(",inventorySize=").append(slot.inventory.getSizeInventory())
+                    .append(",tileEntityFurnace=")
+                    .append(slot.inventory instanceof TileEntityFurnace);
+        }
+        return details.length() == 0 ? "none" : details.toString();
     }
 }

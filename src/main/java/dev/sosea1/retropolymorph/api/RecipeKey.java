@@ -36,6 +36,13 @@ public final class RecipeKey {
     /** Minecraft 1.12 ResourceLocation parsing does not perform modern regex validation. */
     @Nullable
     public static ResourceLocation parseForgeId(String key) {
-        return key == null || key.isEmpty() ? null : new ResourceLocation(key);
+        if (key == null || key.isEmpty()) {
+            return null;
+        }
+        try {
+            return new ResourceLocation(key);
+        } catch (RuntimeException | LinkageError ignored) {
+            return null;
+        }
     }
 }
