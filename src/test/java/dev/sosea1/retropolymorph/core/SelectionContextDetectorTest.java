@@ -3,17 +3,26 @@ package dev.sosea1.retropolymorph.core;
 import dev.sosea1.retropolymorph.api.AdapterDetectionResult;
 import dev.sosea1.retropolymorph.api.RecipeSelectionAdapter;
 import dev.sosea1.retropolymorph.api.RecipeSelectionAdapters;
+import dev.sosea1.retropolymorph.api.RecipeSelectionAdaptersTestAccess;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.util.ResourceLocation;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class SelectionContextDetectorTest {
+
+    @BeforeEach
+    @AfterEach
+    public void resetAdapters() {
+        RecipeSelectionAdaptersTestAccess.reset();
+    }
 
     @Test
     public void blockFallbackRemainsDistinctFromMissWhenAContainerStateChanges() {
