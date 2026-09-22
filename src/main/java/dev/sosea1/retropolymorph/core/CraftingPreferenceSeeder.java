@@ -40,8 +40,8 @@ public final class CraftingPreferenceSeeder {
             new WeakHashMap<Container, Boolean>();
     private static final Map<Container, String> LAST_INPUT =
             new WeakHashMap<Container, String>();
-    private static final Map<SelectionContext, String> PROVISIONAL_SELECTIONS =
-            new WeakHashMap<SelectionContext, String>();
+    private static final Map<Container, ProvisionalSelection> PROVISIONAL_SELECTIONS =
+            new WeakHashMap<Container, ProvisionalSelection>();
 
     private CraftingPreferenceSeeder() {
     }
@@ -321,22 +321,36 @@ public final class CraftingPreferenceSeeder {
             CONTEXT_CACHE.remove(container);
             CONTEXT_MISSES.remove(container);
             LAST_INPUT.remove(container);
+            PROVISIONAL_SELECTIONS.remove(container);
         }
     }
 
     static synchronized void markProvisional(SelectionContext context, String recipeKey) {
-        if (context != null && RecipeKey.isWireSafe(recipeKey)) {
-            PROVISIONAL_SELECTIONS.put(context, recipeKey);
+        if (context == null || !RecipeKey.isWireSafe(recipeKey)) {
+            return;
+        }
+        Container container = context.getContainer();
+        String inputFingerprint = InputFingerprint.create(context);
+        if (container != null && inputFingerprint != null) {
+            PROVISIONAL_SELECTIONS.put(
+                    container, new ProvisionalSelection(recipeKey, inputFingerprint));
         }
     }
 
     static synchronized boolean isProvisional(SelectionContext context, String recipeKey) {
-        return context != null && recipeKey != null && recipeKey.equals(PROVISIONAL_SELECTIONS.get(context));
+        if (context == null || recipeKey == null) {
+            return false;
+        }
+        Container container = context.getContainer();
+        ProvisionalSelection state = container == null ? null : PROVISIONAL_SELECTIONS.get(container);
+        return state != null
+                && recipeKey.equals(state.recipeKey)
+                && state.inputFingerprint.equals(InputFingerprint.create(context));
     }
 
     static synchronized void clearProvisional(SelectionContext context) {
-        if (context != null) {
-            PROVISIONAL_SELECTIONS.remove(context);
+        if (context != null && context.getContainer() != null) {
+            PROVISIONAL_SELECTIONS.remove(context.getContainer());
         }
     }
 
@@ -345,5 +359,15 @@ public final class CraftingPreferenceSeeder {
         CONTEXT_MISSES.clear();
         LAST_INPUT.clear();
         PROVISIONAL_SELECTIONS.clear();
+    }
+
+    private static final class ProvisionalSelection {
+        private final String recipeKey;
+        private final String inputFingerprint;
+
+        private ProvisionalSelection(String recipeKey, String inputFingerprint) {
+            this.recipeKey = recipeKey;
+            this.inputFingerprint = inputFingerprint;
+        }
     }
 }

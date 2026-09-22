@@ -61,7 +61,8 @@ public final class SelectionServiceTest {
                 new RecipeOption("mod:a", new ItemStack(testItem, 1)),
                 new RecipeOption("mod:b", new ItemStack(testItem, 2)),
                 new RecipeOption("mod:c", new ItemStack(testItem, 3)));
-        MockContext ctx = new MockContext(options, SelectionPersistencePolicy.PLAYER_PERSISTENT);
+        MockContext ctx = new MockContext(
+                options, SelectionPersistencePolicy.PLAYER_PERSISTENT, new TestContainer());
 
         SelectionServiceResult result = SelectionService.handle(null, this.playerData, ctx, SelectionCommand.query());
         assertTrue(result.isAccepted());
@@ -78,7 +79,8 @@ public final class SelectionServiceTest {
         List<RecipeOption> options = Arrays.asList(
                 new RecipeOption("mod:a", new ItemStack(testItem, 1)),
                 new RecipeOption("mod:b", new ItemStack(testItem, 2)));
-        MockContext ctx = new MockContext(options, SelectionPersistencePolicy.PLAYER_PERSISTENT);
+        MockContext ctx = new MockContext(
+                options, SelectionPersistencePolicy.PLAYER_PERSISTENT, new TestContainer());
 
         SelectionServiceResult validResult = SelectionService.handle(
                 null, this.playerData, ctx, SelectionCommand.select("mod:a"));
@@ -174,7 +176,8 @@ public final class SelectionServiceTest {
         List<RecipeOption> options = Arrays.asList(
                 new RecipeOption("mod:preseed", new ItemStack(testItem, 1)),
                 new RecipeOption("mod:canonical", new ItemStack(testItem, 2)));
-        MockContext ctx = new MockContext(options, SelectionPersistencePolicy.PLAYER_PERSISTENT);
+        MockContext ctx = new MockContext(
+                options, SelectionPersistencePolicy.PLAYER_PERSISTENT, new TestContainer());
         ctx.select("mod:preseed", null);
         CraftingPreferenceSeeder.markProvisional(ctx, "mod:preseed");
 
@@ -187,6 +190,28 @@ public final class SelectionServiceTest {
         assertEquals("mod:canonical", result.getSelectedRecipeKey());
         assertEquals(SelectionReason.PLAYER_PREFERENCE, result.getReason());
         assertTrue(result.isSelectionChanged());
+    }
+
+    @Test
+    public void canonicalPreferenceOverridesProvisionalPreseedFromAnotherContextOfSameContainer() {
+        List<RecipeOption> options = Arrays.asList(
+                new RecipeOption("mod:preseed", new ItemStack(testItem, 1)),
+                new RecipeOption("mod:canonical", new ItemStack(testItem, 2)));
+        Container container = new TestContainer();
+        MockContext preseedContext = new MockContext(options, SelectionPersistencePolicy.PLAYER_PERSISTENT, container);
+        MockContext queryContext = new MockContext(options, SelectionPersistencePolicy.PLAYER_PERSISTENT, container);
+        preseedContext.select("mod:preseed", null);
+        CraftingPreferenceSeeder.markProvisional(preseedContext, "mod:preseed");
+        queryContext.select("mod:preseed", null);
+
+        PlayerRecipePreferences.remember(
+                this.playerData, ConflictFingerprint.create(options), "mod:canonical");
+
+        SelectionServiceResult result = SelectionService.handle(
+                null, this.playerData, queryContext, SelectionCommand.query());
+
+        assertEquals("mod:canonical", result.getSelectedRecipeKey());
+        assertEquals(SelectionReason.PLAYER_PREFERENCE, result.getReason());
     }
 
     @Test
@@ -294,15 +319,24 @@ public final class SelectionServiceTest {
     private static final class MockContext implements SelectionContext {
         private final List<RecipeOption> options;
         private final SelectionPersistencePolicy policy;
+        @Nullable private final Container container;
         private final ItemStack input = new ItemStack(testItem, 1, 0);
         @Nullable String selectedKey;
 
         MockContext(List<RecipeOption> options, SelectionPersistencePolicy policy) {
-            this.options = options;
-            this.policy = policy;
+            this(options, policy, null);
         }
 
-        @Override public Container getContainer() { return null; }
+        MockContext(
+                List<RecipeOption> options,
+                SelectionPersistencePolicy policy,
+                @Nullable Container container) {
+            this.options = options;
+            this.policy = policy;
+            this.container = container;
+        }
+
+        @Override public Container getContainer() { return this.container; }
         @Override public Slot getResultSlot() { return null; }
         @Override public int getInputCount() { return 1; }
         @Override public ItemStack getInputStack(int index) { return index == 0 ? this.input : ItemStack.EMPTY; }
@@ -314,5 +348,9 @@ public final class SelectionServiceTest {
         @Override public void clearSelection() { this.selectedKey = null; }
         @Nullable @Override public String getSelectedRecipeKey() { return this.selectedKey; }
         @Override public SelectionPersistencePolicy getPersistencePolicy() { return this.policy; }
+    }
+
+    private static final class TestContainer extends Container {
+        @Override public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer playerIn) { return true; }
     }
 }
