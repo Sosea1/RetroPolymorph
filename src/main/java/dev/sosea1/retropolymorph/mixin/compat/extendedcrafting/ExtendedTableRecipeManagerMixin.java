@@ -3,6 +3,7 @@ package dev.sosea1.retropolymorph.mixin.compat.extendedcrafting;
 import dev.sosea1.retropolymorph.compat.extendedcrafting.ExtendedCraftingBridgeRegistry;
 import dev.sosea1.retropolymorph.compat.extendedcrafting.ExtendedTableRecipeManagerBridge;
 import dev.sosea1.retropolymorph.compat.extendedcrafting.ExtendedTableSelectionResolver;
+import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
@@ -44,6 +45,9 @@ public abstract class ExtendedTableRecipeManagerMixin implements ExtendedTableRe
             InventoryCrafting grid,
             World world,
             CallbackInfoReturnable<ItemStack> callbackInfo) {
+        if (!PolymorphConfig.isIntegrationExtendedCraftingEnabled()) {
+            return;
+        }
         IRecipe selected = ExtendedTableSelectionResolver.resolve(grid, world, this);
         if (selected != null) {
             callbackInfo.setReturnValue(selected.getCraftingResult(grid));
@@ -60,6 +64,9 @@ public abstract class ExtendedTableRecipeManagerMixin implements ExtendedTableRe
             InventoryCrafting grid,
             World world,
             CallbackInfoReturnable<NonNullList<ItemStack>> callbackInfo) {
+        if (!PolymorphConfig.isIntegrationExtendedCraftingEnabled()) {
+            return;
+        }
         ExtendedTableRecipeManagerBridge manager = ExtendedCraftingBridgeRegistry.getRecipeManager();
         if (manager == null) {
             return;

@@ -1,5 +1,6 @@
 package dev.sosea1.retropolymorph.compat.rftools;
 
+import dev.sosea1.retropolymorph.core.RecipeProbe;
 import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
 import dev.sosea1.retropolymorph.core.RecipeResolver;
@@ -56,13 +57,12 @@ public final class RFToolsCrafterContext implements RecipeSelectionContext {
     }
 
     @Override
-    public int getButtonOffsetX() {
-        return 19;
-    }
-
-    @Override
-    public int getButtonOffsetY() {
-        return -53;
+    public dev.sosea1.retropolymorph.api.SelectorPlacement getSelectorPlacement() {
+        return dev.sosea1.retropolymorph.api.SelectorPlacement.resultSlot(
+                this.resultSlot.xPos,
+                this.resultSlot.yPos,
+                19,
+                -53);
     }
 
     @Override
@@ -87,7 +87,7 @@ public final class RFToolsCrafterContext implements RecipeSelectionContext {
 
         refreshMatrix();
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(recipeId);
-        if (recipe == null || !recipe.matches(this.matrix, world)) {
+        if (recipe == null || !RecipeProbe.matches(recipe, this.matrix, world)) {
             return false;
         }
 
@@ -122,7 +122,7 @@ public final class RFToolsCrafterContext implements RecipeSelectionContext {
 
     private void applyOutput(IRecipe recipe) {
         refreshMatrix();
-        ItemStack output = recipe.getCraftingResult(this.matrix);
+        ItemStack output = RecipeProbe.craftingResult(recipe, this.matrix);
         this.resultSlot.putStack(output.copy());
     }
 

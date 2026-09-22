@@ -6,6 +6,9 @@ import org.spongepowered.asm.mixin.Pseudo;
 
 /** Marker-only optional mixin for AE2 UEL SlotCraftingMatrix. */
 @Pseudo
-@Mixin(targets = "appeng.container.slot.SlotCraftingMatrix", remap = false)
+@Mixin(targets = {
+        "appeng.container.slot.SlotCraftingMatrix",
+        "appeng.container.slot.SlotFakeCraftingMatrix"
+}, remap = false)
 public abstract class Ae2CraftingMatrixSlotMixin implements Ae2CraftingMatrixSlot {
 }

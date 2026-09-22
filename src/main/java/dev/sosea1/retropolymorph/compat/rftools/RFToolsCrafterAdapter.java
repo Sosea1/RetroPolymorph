@@ -1,7 +1,9 @@
 package dev.sosea1.retropolymorph.compat.rftools;
 
+import dev.sosea1.retropolymorph.api.AdapterDetectionResult;
 import dev.sosea1.retropolymorph.api.RecipeSelectionAdapter;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
+import dev.sosea1.retropolymorph.api.SelectionContext;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
 
@@ -23,28 +25,25 @@ public final class RFToolsCrafterAdapter implements RecipeSelectionAdapter {
     }
 
     @Override
-    @Nullable
-    public RecipeSelectionContext createContext(Container container) {
+    public AdapterDetectionResult probe(Container container) {
         if (!container.getClass().getName().equals(CRAFTER_CONTAINER_CLASS)) {
-            return null;
+            return AdapterDetectionResult.miss();
         }
 
         if (container.inventorySlots.size() < 10) {
-            return null;
+            return AdapterDetectionResult.blockFallback();
         }
 
-        // Slots 0..8 are the 3x3 ghost crafting input slots
         Slot[] inputs = new Slot[9];
         for (int i = 0; i < 9; i++) {
             inputs[i] = container.inventorySlots.get(i);
         }
 
-        // Slot 9 is the ghost crafting output slot
         Slot output = container.inventorySlots.get(9);
         if (output == null) {
-            return null;
+            return AdapterDetectionResult.blockFallback();
         }
 
-        return new RFToolsCrafterContext(container, inputs, output);
+        return AdapterDetectionResult.match(new RFToolsCrafterContext(container, inputs, output));
     }
 }

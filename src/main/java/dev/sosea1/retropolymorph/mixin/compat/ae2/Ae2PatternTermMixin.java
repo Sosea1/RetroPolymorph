@@ -1,9 +1,11 @@
 package dev.sosea1.retropolymorph.mixin.compat.ae2;
 
 import dev.sosea1.retropolymorph.compat.ae2.Ae2PatternTermExtension;
+import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import dev.sosea1.retropolymorph.core.RecipeSelectionSeeder;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.ResourceLocation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -25,11 +27,14 @@ import javax.annotation.Nullable;
  * the normal Retro Polymorph CraftingManager hook performs final validation.
  */
 @Pseudo
-@Mixin(targets = "appeng.container.implementations.ContainerPatternTerm", remap = false)
+@Mixin(targets = "appeng.container.implementations.ContainerPatternEncoder", remap = false)
 public abstract class Ae2PatternTermMixin implements Ae2PatternTermExtension {
 
     @Shadow(remap = false)
     public boolean craftingMode;
+
+    @Shadow(remap = false)
+    protected IRecipe currentRecipe;
 
     @Unique
     @Nullable
@@ -60,6 +65,7 @@ public abstract class Ae2PatternTermMixin implements Ae2PatternTermExtension {
     @Override
     public void retropolymorph$setPatternSelectedRecipeId(@Nullable ResourceLocation recipeId) {
         this.retropolymorph$patternSelectedRecipeId = recipeId;
+        this.currentRecipe = null;
     }
 
     @Override
@@ -79,8 +85,14 @@ public abstract class Ae2PatternTermMixin implements Ae2PatternTermExtension {
             remap = false,
             require = 1)
     private InventoryCrafting retropolymorph$seedPatternPreview(InventoryCrafting matrix) {
+        if (!PolymorphConfig.isIntegrationAe2Enabled()) {
+            return matrix;
+        }
         ResourceLocation selected = this.retropolymorph$patternSelectedRecipeId;
         this.retropolymorph$patternPreviewMatrix = matrix;
+        if (selected != null) {
+            this.currentRecipe = null;
+        }
         RecipeSelectionSeeder.seed(matrix, selected);
         return matrix;
     }
@@ -91,6 +103,9 @@ public abstract class Ae2PatternTermMixin implements Ae2PatternTermExtension {
             remap = false,
             require = 1)
     private void retropolymorph$finishPatternPreview(CallbackInfoReturnable<ItemStack> cir) {
+        if (!PolymorphConfig.isIntegrationAe2Enabled()) {
+            return;
+        }
         ResourceLocation selected = this.retropolymorph$patternSelectedRecipeId;
         InventoryCrafting matrix = this.retropolymorph$patternPreviewMatrix;
         boolean observed = matrix != null
@@ -111,6 +126,9 @@ public abstract class Ae2PatternTermMixin implements Ae2PatternTermExtension {
             remap = false,
             require = 1)
     private InventoryCrafting retropolymorph$seedPatternRequest(InventoryCrafting matrix) {
+        if (!PolymorphConfig.isIntegrationAe2Enabled()) {
+            return matrix;
+        }
         RecipeSelectionSeeder.seed(matrix, this.retropolymorph$patternSelectedRecipeId);
         return matrix;
     }

@@ -2,7 +2,9 @@ package dev.sosea1.retropolymorph.compat.ae2;
 
 import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
+import dev.sosea1.retropolymorph.core.RecipeProbe;
 import dev.sosea1.retropolymorph.core.RecipeResolver;
+import dev.sosea1.retropolymorph.core.RecipeSelectionSeeder;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
@@ -18,33 +20,45 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 /**
- * Adapter context for AE2 UEL's crafting terminal.
+ * Adapter context for AE2 UEL crafting terminals and wireless wrappers.
  *
- * AE2 stores its grid in IItemHandler-backed slots and rebuilds a temporary
- * InventoryCrafting whenever it resolves recipes. This context keeps one small
- * reusable mirror for matching/UI while the actual selected recipe remains in
- * AE2's own currentRecipe field through the soft bridge.
+ * <p>The visible AE2 grid often is not itself an InventoryCrafting. A reusable
+ * mirror is used only for recipe matching, while selection is stored against
+ * the actual Container. The optional extension is still used when available to
+ * keep AE2's currentRecipe field aligned, but it is no longer required for a
+ * valid crafting-terminal topology.</p>
  */
 final class Ae2CraftingTermContext implements RecipeSelectionContext {
 
     private static final Container MIRROR_OWNER = new MirrorContainer();
 
     private final Container container;
+    @Nullable
     private final Ae2CraftingTermExtension extension;
     private final Slot[] inputSlots;
     private final Slot resultSlot;
+    private final boolean wireless;
     private final InventoryCrafting matrix = new InventoryCrafting(MIRROR_OWNER, 3, 3);
 
     Ae2CraftingTermContext(
             Container container,
-            Ae2CraftingTermExtension extension,
+            @Nullable Ae2CraftingTermExtension extension,
             Slot[] inputSlots,
-            Slot resultSlot) {
+            Slot resultSlot,
+            boolean wireless) {
         this.container = container;
         this.extension = extension;
         this.inputSlots = inputSlots;
         this.resultSlot = resultSlot;
+        this.wireless = wireless;
         refreshMatrix();
+
+        if (extension != null) {
+            ResourceLocation selected = extension.retropolymorph$getAe2SelectedRecipeId();
+            if (selected != null) {
+                Ae2SelectionStore.set(container, selected);
+            }
+        }
     }
 
     @Override
@@ -61,6 +75,15 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
     @Override
     public Slot getResultSlot() {
         return this.resultSlot;
+    }
+
+    @Override
+    public dev.sosea1.retropolymorph.api.SelectorPlacement getSelectorPlacement() {
+        return dev.sosea1.retropolymorph.api.SelectorPlacement.resultSlot(
+                this.resultSlot.xPos,
+                this.resultSlot.yPos,
+                this.wireless ? 18 : 0,
+                this.wireless ? 8 : 0);
     }
 
     @Override
@@ -85,25 +108,27 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
 
         refreshMatrix();
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(recipeId);
-        if (recipe == null || !recipe.matches(this.matrix, world)) {
+        if (recipe == null || !RecipeProbe.matches(recipe, this.matrix, world)) {
             return false;
         }
 
-        this.extension.retropolymorph$setAe2SelectedRecipeId(recipeId);
-        this.extension.retropolymorph$setAe2CurrentRecipe(recipe);
-        refreshOutput();
+        setSelection(recipeId, recipe);
+        seedNativeMatrices(recipeId);
+        putSelectedResult(recipe);
         return true;
     }
 
     @Override
     public void clearSelection() {
-        if (getSelectedRecipeIdInternal() == null) {
+        ResourceLocation selected = getSelectedRecipeIdInternal();
+        if (selected == null) {
+            clearVisibleResultIfGridEmpty();
             return;
         }
 
-        this.extension.retropolymorph$setAe2SelectedRecipeId(null);
-        this.extension.retropolymorph$setAe2CurrentRecipe(null);
-        refreshOutput();
+        setSelection(null, null);
+        clearNativeMatrices();
+        clearVisibleResultIfGridEmpty();
     }
 
     @Override
@@ -117,9 +142,9 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
     public void applyRemoteSelection(@Nullable String recipeKey) {
         ResourceLocation recipeId = RecipeKey.parseForgeId(recipeKey);
         if (recipeId == null) {
-            this.extension.retropolymorph$setAe2SelectedRecipeId(null);
-            this.extension.retropolymorph$setAe2CurrentRecipe(null);
-            refreshOutput();
+            setSelection(null, null);
+            clearNativeMatrices();
+            clearVisibleResultIfGridEmpty();
             return;
         }
 
@@ -128,14 +153,61 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
             return;
         }
 
-        this.extension.retropolymorph$setAe2SelectedRecipeId(recipeId);
-        this.extension.retropolymorph$setAe2CurrentRecipe(recipe);
-        refreshOutput();
+        refreshMatrix();
+        setSelection(recipeId, recipe);
+        seedNativeMatrices(recipeId);
+        putSelectedResult(recipe);
+    }
+
+    private void setSelection(@Nullable ResourceLocation recipeId, @Nullable IRecipe recipe) {
+        Ae2SelectionStore.set(this.container, recipeId);
+        if (this.extension != null) {
+            this.extension.retropolymorph$setAe2SelectedRecipeId(recipeId);
+            this.extension.retropolymorph$setAe2CurrentRecipe(recipe);
+        }
     }
 
     @Nullable
     private ResourceLocation getSelectedRecipeIdInternal() {
-        return this.extension.retropolymorph$getAe2SelectedRecipeId();
+        ResourceLocation selected = Ae2SelectionStore.get(this.container);
+        if (selected != null) {
+            return selected;
+        }
+        if (this.extension != null) {
+            selected = this.extension.retropolymorph$getAe2SelectedRecipeId();
+            if (selected != null) {
+                Ae2SelectionStore.set(this.container, selected);
+            }
+        }
+        return selected;
+    }
+
+    private void seedNativeMatrices(ResourceLocation recipeId) {
+        InventoryCrafting last = null;
+        for (Slot slot : this.inputSlots) {
+            if (!(slot.inventory instanceof InventoryCrafting)) {
+                continue;
+            }
+            InventoryCrafting nativeMatrix = (InventoryCrafting) slot.inventory;
+            if (nativeMatrix != last) {
+                RecipeSelectionSeeder.seed(nativeMatrix, recipeId);
+                last = nativeMatrix;
+            }
+        }
+    }
+
+    private void clearNativeMatrices() {
+        InventoryCrafting last = null;
+        for (Slot slot : this.inputSlots) {
+            if (!(slot.inventory instanceof InventoryCrafting)) {
+                continue;
+            }
+            InventoryCrafting nativeMatrix = (InventoryCrafting) slot.inventory;
+            if (nativeMatrix != last) {
+                RecipeSelectionSeeder.clear(nativeMatrix);
+                last = nativeMatrix;
+            }
+        }
     }
 
     private void refreshMatrix() {
@@ -148,14 +220,34 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
         }
     }
 
-    private void refreshOutput() {
-        this.container.onCraftMatrixChanged(this.matrix);
-        IRecipe recipe = this.extension.retropolymorph$getAe2CurrentRecipe();
-        if (recipe != null) {
-            refreshMatrix();
-            ItemStack outputStack = recipe.getCraftingResult(this.matrix);
-            this.resultSlot.putStack(outputStack);
+    private void putSelectedResult(IRecipe recipe) {
+        refreshMatrix();
+        if (isGridEmpty()) {
+            this.resultSlot.putStack(ItemStack.EMPTY);
+            return;
         }
+
+        // Do not ask the terminal to recalculate before writing the selected
+        // result. Native AE2 and WCT both default to the first matching recipe
+        // in that recalculation, which was the source of the misleading preview.
+        ItemStack outputStack = RecipeProbe.craftingResult(recipe, this.matrix);
+        this.resultSlot.putStack(outputStack);
+    }
+
+    private void clearVisibleResultIfGridEmpty() {
+        refreshMatrix();
+        if (isGridEmpty()) {
+            this.resultSlot.putStack(ItemStack.EMPTY);
+        }
+    }
+
+    private boolean isGridEmpty() {
+        for (Slot slot : this.inputSlots) {
+            if (!slot.getStack().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static final class MirrorContainer extends Container {

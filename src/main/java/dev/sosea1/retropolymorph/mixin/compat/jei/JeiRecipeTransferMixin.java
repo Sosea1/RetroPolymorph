@@ -1,6 +1,8 @@
 package dev.sosea1.retropolymorph.mixin.compat.jei;
 
+import dev.sosea1.retropolymorph.client.JeiRecipeIdentity;
 import dev.sosea1.retropolymorph.client.JeiTransferIntent;
+import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import mezz.jei.gui.ingredients.GuiIngredient;
 import mezz.jei.gui.ingredients.GuiItemStackGroup;
 import mezz.jei.gui.recipes.RecipeLayout;
@@ -39,7 +41,7 @@ public abstract class JeiRecipeTransferMixin {
             boolean maxTransfer,
             boolean doTransfer,
             CallbackInfoReturnable<Object> cir) {
-        if (!doTransfer || cir.getReturnValue() != null) {
+        if (!PolymorphConfig.isIntegrationJeiEnabled() || !doTransfer || cir.getReturnValue() != null) {
             return;
         }
 
@@ -71,6 +73,6 @@ public abstract class JeiRecipeTransferMixin {
                 }
             }
         }
-        JeiTransferIntent.capture(container, outputs);
+        JeiTransferIntent.capture(container, JeiRecipeIdentity.tryExtractRecipeKey(layout), outputs);
     }
 }

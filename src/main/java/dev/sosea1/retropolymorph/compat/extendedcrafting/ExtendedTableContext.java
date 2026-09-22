@@ -1,5 +1,6 @@
 package dev.sosea1.retropolymorph.compat.extendedcrafting;
 
+import dev.sosea1.retropolymorph.core.RecipeProbe;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
 import dev.sosea1.retropolymorph.core.CraftingContext;
 import dev.sosea1.retropolymorph.core.CraftingMatrixExtension;
@@ -158,7 +159,7 @@ final class ExtendedTableContext implements RecipeSelectionContext {
         }
 
         IRecipe recipe = recipes.get(index);
-        if (recipe == null || !recipe.matches(this.matrix, world)) {
+        if (recipe == null || !RecipeProbe.matches(recipe, this.matrix, world)) {
             return false;
         }
 
@@ -189,7 +190,7 @@ final class ExtendedTableContext implements RecipeSelectionContext {
 
         ArrayList<IRecipe> matches = new ArrayList<IRecipe>();
         for (IRecipe recipe : recipes) {
-            if (recipe != null && recipe.matches(this.matrix, world)) {
+            if (recipe != null && RecipeProbe.matches(recipe, this.matrix, world)) {
                 matches.add(recipe);
             }
         }

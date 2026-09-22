@@ -1,5 +1,6 @@
 package dev.sosea1.retropolymorph.compat.ae2;
 
+import dev.sosea1.retropolymorph.core.RecipeProbe;
 import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
 import dev.sosea1.retropolymorph.core.RecipeResolver;
@@ -66,6 +67,11 @@ final class Ae2PatternTermContext implements RecipeSelectionContext {
     }
 
     @Override
+    public int getClientStateToken() {
+        return this.extension.retropolymorph$isPatternCraftingMode() ? 1 : 0;
+    }
+
+    @Override
     public List<IRecipe> findAllMatches(World world) {
         if (!this.extension.retropolymorph$isPatternCraftingMode()) {
             return Collections.emptyList();
@@ -96,7 +102,7 @@ final class Ae2PatternTermContext implements RecipeSelectionContext {
 
         refreshMatrix();
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(recipeId);
-        if (recipe == null || !recipe.matches(this.matrix, world)) {
+        if (recipe == null || !RecipeProbe.matches(recipe, this.matrix, world)) {
             return false;
         }
 

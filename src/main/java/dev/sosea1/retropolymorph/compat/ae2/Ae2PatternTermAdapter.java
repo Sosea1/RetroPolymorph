@@ -1,7 +1,9 @@
 package dev.sosea1.retropolymorph.compat.ae2;
 
+import dev.sosea1.retropolymorph.api.AdapterDetectionResult;
 import dev.sosea1.retropolymorph.api.RecipeSelectionAdapter;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
+import dev.sosea1.retropolymorph.api.SelectionContext;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
 
@@ -16,10 +18,9 @@ public final class Ae2PatternTermAdapter implements RecipeSelectionAdapter {
     }
 
     @Override
-    @Nullable
-    public RecipeSelectionContext createContext(Container container) {
+    public AdapterDetectionResult probe(Container container) {
         if (!(container instanceof Ae2PatternTermExtension)) {
-            return null;
+            return AdapterDetectionResult.miss();
         }
 
         Slot[] inputs = new Slot[9];
@@ -30,7 +31,7 @@ public final class Ae2PatternTermAdapter implements RecipeSelectionAdapter {
             if (slot instanceof Ae2PatternCraftingSlot) {
                 int index = slot.getSlotIndex();
                 if (index < 0 || index >= inputs.length || inputs[index] != null) {
-                    return null;
+                    return AdapterDetectionResult.blockFallback();
                 }
                 inputs[index] = slot;
                 inputCount++;
@@ -38,20 +39,20 @@ public final class Ae2PatternTermAdapter implements RecipeSelectionAdapter {
 
             if (slot instanceof Ae2CraftingResultSlot) {
                 if (output != null) {
-                    return null;
+                    return AdapterDetectionResult.blockFallback();
                 }
                 output = slot;
             }
         }
 
         if (inputCount != inputs.length || output == null) {
-            return null;
+            return AdapterDetectionResult.blockFallback();
         }
 
-        return new Ae2PatternTermContext(
+        return AdapterDetectionResult.match(new Ae2PatternTermContext(
                 container,
                 (Ae2PatternTermExtension) container,
                 inputs,
-                output);
+                output));
     }
 }

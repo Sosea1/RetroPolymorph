@@ -1,7 +1,9 @@
 package dev.sosea1.retropolymorph.compat.extendedcrafting;
 
+import dev.sosea1.retropolymorph.api.AdapterDetectionResult;
 import dev.sosea1.retropolymorph.api.RecipeSelectionAdapter;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
+import dev.sosea1.retropolymorph.api.SelectionContext;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.inventory.Slot;
@@ -17,12 +19,11 @@ public final class ExtendedTableAdapter implements RecipeSelectionAdapter {
     }
 
     @Override
-    @Nullable
-    public RecipeSelectionContext createContext(Container container) {
+    public AdapterDetectionResult probe(Container container) {
         ExtendedTableRecipeManagerBridge manager =
                 ExtendedCraftingBridgeRegistry.getRecipeManager();
         if (manager == null) {
-            return null;
+            return AdapterDetectionResult.miss();
         }
 
         Slot resultSlot = null;
@@ -32,18 +33,17 @@ public final class ExtendedTableAdapter implements RecipeSelectionAdapter {
                 continue;
             }
             if (resultSlot != null) {
-                return null;
+                return AdapterDetectionResult.blockFallback();
             }
 
             resultSlot = slot;
             matrix = ((ExtendedTableResultSlot) slot).retropolymorph$getExtendedCraftingMatrix();
         }
 
-        if (resultSlot == null
-                || !(matrix instanceof ExtendedTableMatrixExtension)) {
-            return null;
+        if (resultSlot == null || !(matrix instanceof ExtendedTableMatrixExtension)) {
+            return AdapterDetectionResult.miss();
         }
 
-        return new ExtendedTableContext(container, matrix, resultSlot, manager);
+        return AdapterDetectionResult.match(new ExtendedTableContext(container, matrix, resultSlot, manager));
     }
 }
