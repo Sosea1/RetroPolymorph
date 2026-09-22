@@ -18,7 +18,7 @@ import java.util.List;
  * A detected user-facing crafting context backed by a real InventoryCrafting
  * and the normal Forge recipe registry.
  */
-public final class CraftingContext implements RecipeSelectionContext {
+public class CraftingContext implements RecipeSelectionContext {
 
     private final Container container;
     private final InventoryCrafting matrix;
@@ -72,7 +72,7 @@ public final class CraftingContext implements RecipeSelectionContext {
         }
 
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(recipeId);
-        if (recipe == null || !recipe.matches(this.matrix, world)) {
+        if (recipe == null || !RecipeProbe.matches(recipe, this.matrix, world)) {
             return false;
         }
 
@@ -99,6 +99,33 @@ public final class CraftingContext implements RecipeSelectionContext {
         RecipeSelectionState state = extension().retropolymorph$peekRecipeSelectionState();
         ResourceLocation recipeId = state == null ? null : state.getSelectedRecipeId();
         return recipeId == null ? null : recipeId.toString();
+    }
+
+    @Override
+    public void applyRemoteSelection(@Nullable String recipeKey) {
+        RecipeSelectionState current = extension().retropolymorph$peekRecipeSelectionState();
+        if (recipeKey == null) {
+            if (current != null) {
+                current.clear();
+            }
+            refreshOutput();
+            return;
+        }
+
+        ResourceLocation recipeId = RecipeKey.parseForgeId(recipeKey);
+        if (recipeId == null) {
+            if (current != null) {
+                current.clear();
+            }
+            refreshOutput();
+            return;
+        }
+
+        extension().retropolymorph$getOrCreateRecipeSelectionState().select(recipeId);
+        // Several 1.12 mod GUIs recompute their preview locally. Without mirroring
+        // the authoritative selection into the client matrix they keep drawing
+        // Forge's first match even though the server crafts the selected recipe.
+        refreshOutput();
     }
 
     public void refreshOutput() {

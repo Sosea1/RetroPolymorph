@@ -1,5 +1,7 @@
 package dev.sosea1.retropolymorph.core;
 
+import net.minecraft.inventory.Container;
+
 import javax.annotation.Nullable;
 
 /**
@@ -16,4 +18,8 @@ public interface CraftingMatrixExtension {
     RecipeSelectionState retropolymorph$peekRecipeSelectionState();
 
     RecipeSelectionState retropolymorph$getOrCreateRecipeSelectionState();
+
+    /** Vanilla owner/event handler of this crafting matrix. */
+    @Nullable
+    Container retropolymorph$getCraftingOwner();
 }

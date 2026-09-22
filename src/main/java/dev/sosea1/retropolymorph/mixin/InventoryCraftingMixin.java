@@ -2,14 +2,21 @@ package dev.sosea1.retropolymorph.mixin;
 
 import dev.sosea1.retropolymorph.core.CraftingMatrixExtension;
 import dev.sosea1.retropolymorph.core.RecipeSelectionState;
+import net.minecraft.inventory.Container;
 import net.minecraft.inventory.InventoryCrafting;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 
 import javax.annotation.Nullable;
 
 @Mixin(InventoryCrafting.class)
 public abstract class InventoryCraftingMixin implements CraftingMatrixExtension {
+
+    @Shadow
+    @Final
+    private Container eventHandler;
 
     @Unique
     @Nullable
@@ -29,5 +36,11 @@ public abstract class InventoryCraftingMixin implements CraftingMatrixExtension 
             this.retropolymorph$recipeSelectionState = state;
         }
         return state;
+    }
+
+    @Override
+    @Nullable
+    public Container retropolymorph$getCraftingOwner() {
+        return this.eventHandler;
     }
 }

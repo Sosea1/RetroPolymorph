@@ -20,17 +20,14 @@ final class FurnaceContext implements SelectionContext {
     private final Container container;
     private final IInventory furnace;
     private final Slot resultSlot;
-    private final FurnaceSelectionExtension extension;
 
     FurnaceContext(
             Container container,
             IInventory furnace,
-            Slot resultSlot,
-            FurnaceSelectionExtension extension) {
+            Slot resultSlot) {
         this.container = container;
         this.furnace = furnace;
         this.resultSlot = resultSlot;
-        this.extension = extension;
     }
 
     @Override
@@ -64,7 +61,7 @@ final class FurnaceContext implements SelectionContext {
     public boolean select(String recipeKey, World world) {
         boolean selected = FurnaceRecipeResolver.selectLazy(
                 FurnaceRecipes.instance(),
-                this.extension,
+                this.furnace,
                 this.furnace.getStackInSlot(INPUT_SLOT),
                 recipeKey);
         if (selected) {
@@ -75,7 +72,7 @@ final class FurnaceContext implements SelectionContext {
 
     @Override
     public void clearSelection() {
-        FurnaceSelectionState state = this.extension.retropolymorph$peekFurnaceSelectionState();
+        FurnaceSelectionState state = FurnaceSelectionStore.peek(this.furnace);
         if (state == null || !state.hasSelection()) {
             return;
         }
@@ -91,7 +88,7 @@ final class FurnaceContext implements SelectionContext {
     @Override
     @Nullable
     public String getSelectedRecipeKey() {
-        FurnaceSelectionState state = this.extension.retropolymorph$peekFurnaceSelectionState();
+        FurnaceSelectionState state = FurnaceSelectionStore.peek(this.furnace);
         if (state == null) {
             return null;
         }
@@ -112,13 +109,13 @@ final class FurnaceContext implements SelectionContext {
 
     @Override
     public void applyRemoteSelection(@Nullable String recipeKey) {
-        FurnaceSelectionState state = this.extension.retropolymorph$peekFurnaceSelectionState();
+        FurnaceSelectionState state = FurnaceSelectionStore.peek(this.furnace);
         if (recipeKey == null) {
             if (state != null) {
                 state.clear();
             }
             return;
         }
-        this.extension.retropolymorph$getOrCreateFurnaceSelectionState().setPersistentKey(recipeKey);
+        FurnaceSelectionStore.getOrCreate(this.furnace).setPersistentKey(recipeKey);
     }
 }

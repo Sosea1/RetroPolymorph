@@ -31,6 +31,10 @@ public final class CraftingContextDetector {
 
     @Nullable
     public static RecipeSelectionContext detect(Container container) {
+        if (container == null) {
+            return null;
+        }
+
         CraftingContext exact = detectFromSlotCrafting(container);
         if (exact != null) {
             return exact;

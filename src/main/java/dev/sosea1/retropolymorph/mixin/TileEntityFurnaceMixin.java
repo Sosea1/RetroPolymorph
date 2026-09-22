@@ -4,6 +4,7 @@ import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.furnace.FurnaceRecipeResolver;
 import dev.sosea1.retropolymorph.furnace.FurnaceSelectionExtension;
 import dev.sosea1.retropolymorph.furnace.FurnaceSelectionState;
+import dev.sosea1.retropolymorph.furnace.FurnaceSelectionStore;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.nbt.NBTTagCompound;
@@ -29,22 +30,14 @@ public abstract class TileEntityFurnaceMixin implements FurnaceSelectionExtensio
     @Unique
     private static final int OUTPUT_SLOT = 2;
 
-    @Unique
-    private FurnaceSelectionState retropolymorph$furnaceSelection;
-
     @Override
     public FurnaceSelectionState retropolymorph$peekFurnaceSelectionState() {
-        return this.retropolymorph$furnaceSelection;
+        return FurnaceSelectionStore.peek((TileEntityFurnace) (Object) this);
     }
 
     @Override
     public FurnaceSelectionState retropolymorph$getOrCreateFurnaceSelectionState() {
-        FurnaceSelectionState state = this.retropolymorph$furnaceSelection;
-        if (state == null) {
-            state = new FurnaceSelectionState();
-            this.retropolymorph$furnaceSelection = state;
-        }
-        return state;
+        return FurnaceSelectionStore.getOrCreate((TileEntityFurnace) (Object) this);
     }
 
     @Inject(method = "readFromNBT", at = @At("RETURN"))

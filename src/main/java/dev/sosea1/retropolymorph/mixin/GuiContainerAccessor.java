@@ -16,4 +16,10 @@ public interface GuiContainerAccessor {
 
     @Accessor("guiTop")
     int retropolymorph$getGuiTop();
+
+    @Accessor("xSize")
+    int retropolymorph$getXSize();
+
+    @Accessor("ySize")
+    int retropolymorph$getYSize();
 }

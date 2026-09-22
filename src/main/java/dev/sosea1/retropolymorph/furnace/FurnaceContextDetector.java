@@ -2,9 +2,11 @@ package dev.sosea1.retropolymorph.furnace;
 
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import net.minecraft.inventory.Container;
+import net.minecraft.inventory.ContainerFurnace;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
 import net.minecraft.inventory.SlotFurnaceOutput;
+import net.minecraft.tileentity.TileEntityFurnace;
 
 import javax.annotation.Nullable;
 
@@ -16,27 +18,31 @@ public final class FurnaceContextDetector {
 
     @Nullable
     public static SelectionContext detect(Container container) {
+        if (container == null) {
+            return null;
+        }
+
+        boolean vanillaContainer = container.getClass() == ContainerFurnace.class;
         Slot resultSlot = null;
         IInventory furnace = null;
-        FurnaceSelectionExtension extension = null;
 
         for (Slot slot : container.inventorySlots) {
-            if (!(slot instanceof SlotFurnaceOutput)
-                    || !(slot.inventory instanceof FurnaceSelectionExtension)) {
+            if (!(slot instanceof SlotFurnaceOutput)) {
                 continue;
             }
 
-            if (resultSlot != null || slot.inventory.getSizeInventory() < 3) {
+            if (resultSlot != null
+                    || (!vanillaContainer && !(slot.inventory instanceof TileEntityFurnace))
+                    || slot.inventory.getSizeInventory() < 3) {
                 return null;
             }
 
             resultSlot = slot;
             furnace = slot.inventory;
-            extension = (FurnaceSelectionExtension) furnace;
         }
 
         return resultSlot == null
                 ? null
-                : new FurnaceContext(container, furnace, resultSlot, extension);
+                : new FurnaceContext(container, furnace, resultSlot);
     }
 }

@@ -29,6 +29,17 @@ public final class RecipeSelectionSeeder {
         extension.retropolymorph$getOrCreateRecipeSelectionState().select(selectedRecipeId);
     }
 
+    public static void clear(InventoryCrafting matrix) {
+        if (!(matrix instanceof CraftingMatrixExtension)) {
+            return;
+        }
+        RecipeSelectionState state = ((CraftingMatrixExtension) matrix)
+                .retropolymorph$peekRecipeSelectionState();
+        if (state != null) {
+            state.clear();
+        }
+    }
+
     public static boolean wasOutputResolutionObserved(
             InventoryCrafting matrix,
             @Nullable ResourceLocation expectedRecipeId) {

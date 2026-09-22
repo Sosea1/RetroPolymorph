@@ -4,6 +4,7 @@ import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeOption;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.FurnaceRecipes;
+import net.minecraft.inventory.IInventory;
 import net.minecraft.util.ResourceLocation;
 
 import javax.annotation.Nullable;
@@ -68,7 +69,7 @@ public final class FurnaceRecipeResolver {
      */
     public static boolean selectLazy(
             FurnaceRecipes recipes,
-            FurnaceSelectionExtension extension,
+            IInventory furnace,
             ItemStack currentInput,
             String recipeKey) {
         ResolvedRecipe match = findUnique(recipes, currentInput, recipeKey);
@@ -76,7 +77,7 @@ public final class FurnaceRecipeResolver {
             return false;
         }
 
-        FurnaceSelectionState state = extension.retropolymorph$getOrCreateFurnaceSelectionState();
+        FurnaceSelectionState state = FurnaceSelectionStore.getOrCreate(furnace);
         match.applyTo(state, recipeKey);
         return true;
     }

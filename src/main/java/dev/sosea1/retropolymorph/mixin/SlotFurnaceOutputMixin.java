@@ -1,7 +1,7 @@
 package dev.sosea1.retropolymorph.mixin;
 
 import dev.sosea1.retropolymorph.furnace.FurnaceRecipeResolver;
-import dev.sosea1.retropolymorph.furnace.FurnaceSelectionExtension;
+import dev.sosea1.retropolymorph.furnace.FurnaceSelectionStore;
 import dev.sosea1.retropolymorph.furnace.FurnaceSelectionState;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.SlotFurnaceOutput;
@@ -24,9 +24,7 @@ public abstract class SlotFurnaceOutputMixin {
             require = 1)
     private float retropolymorph$getSelectedExperience(FurnaceRecipes recipes, ItemStack output) {
         IInventory inventory = ((SlotInventoryAccessor) (Object) this).retropolymorph$getInventory();
-        FurnaceSelectionState state = inventory instanceof FurnaceSelectionExtension
-                ? ((FurnaceSelectionExtension) inventory).retropolymorph$peekFurnaceSelectionState()
-                : null;
+        FurnaceSelectionState state = FurnaceSelectionStore.peek(inventory);
         return FurnaceRecipeResolver.getSmeltingExperience(recipes, state, output);
     }
 }
