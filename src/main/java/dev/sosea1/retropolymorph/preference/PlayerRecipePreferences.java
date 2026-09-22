@@ -11,13 +11,19 @@ import javax.annotation.Nullable;
 
 /**
  * Small bounded persistent preference store kept in Forge's player persisted NBT.
- * Entries are ordered by most recent explicit selection; the store never grows past 128 conflicts.
+ *
+ * <p>The canonical conflict fingerprint remains the durable semantic key. A
+ * second bounded input-fingerprint index is maintained only so the server can
+ * restore a known recipe before an asynchronous selector query has enumerated
+ * every matching recipe again.</p>
  */
 public final class PlayerRecipePreferences {
 
     private static final String ROOT_TAG = "retropolymorphPreferences";
     private static final String ENTRIES_TAG = "entries";
+    private static final String INPUT_ENTRIES_TAG = "inputEntries";
     private static final String FINGERPRINT_TAG = "fingerprint";
+    private static final String INPUT_FINGERPRINT_TAG = "input";
     private static final String RECIPE_TAG = "recipe";
     private static final int MAX_ENTRIES = 128;
     private static final int MAX_FINGERPRINT_CHARS = 80;
@@ -32,26 +38,17 @@ public final class PlayerRecipePreferences {
 
     @Nullable
     public static String lookup(@Nullable NBTTagCompound entityData, @Nullable String fingerprint) {
-        if (!isFingerprintSafe(fingerprint) || entityData == null) {
-            return null;
-        }
+        return lookupEntry(entityData, ENTRIES_TAG, FINGERPRINT_TAG, fingerprint);
+    }
 
-        NBTTagList entries = getEntries(entityData, false);
-        if (entries == null) {
-            return null;
-        }
+    @Nullable
+    public static String lookupInput(@Nullable EntityPlayerMP player, @Nullable String inputFingerprint) {
+        return player == null ? null : lookupInput(player.getEntityData(), inputFingerprint);
+    }
 
-        int count = Math.min(entries.tagCount(), MAX_ENTRIES);
-        for (int index = 0; index < count; index++) {
-            NBTTagCompound entry = entries.getCompoundTagAt(index);
-            if (!fingerprint.equals(entry.getString(FINGERPRINT_TAG))) {
-                continue;
-            }
-
-            String recipe = entry.getString(RECIPE_TAG);
-            return RecipeKey.isWireSafe(recipe) ? recipe : null;
-        }
-        return null;
+    @Nullable
+    public static String lookupInput(@Nullable NBTTagCompound entityData, @Nullable String inputFingerprint) {
+        return lookupEntry(entityData, INPUT_ENTRIES_TAG, INPUT_FINGERPRINT_TAG, inputFingerprint);
     }
 
     public static void remember(
@@ -67,33 +64,23 @@ public final class PlayerRecipePreferences {
             @Nullable NBTTagCompound entityData,
             @Nullable String fingerprint,
             @Nullable String recipeKey) {
-        if (entityData == null || !isFingerprintSafe(fingerprint) || !RecipeKey.isWireSafe(recipeKey)) {
-            return;
-        }
+        rememberEntry(entityData, ENTRIES_TAG, FINGERPRINT_TAG, fingerprint, recipeKey);
+    }
 
-        NBTTagList previous = getEntries(entityData, false);
-        NBTTagList updated = new NBTTagList();
-        updated.appendTag(createEntry(fingerprint, recipeKey));
-
-        if (previous != null) {
-            int count = Math.min(previous.tagCount(), MAX_ENTRIES);
-            for (int index = 0; index < count && updated.tagCount() < MAX_ENTRIES; index++) {
-                NBTTagCompound entry = previous.getCompoundTagAt(index);
-                String oldFingerprint = entry.getString(FINGERPRINT_TAG);
-                String oldRecipe = entry.getString(RECIPE_TAG);
-                if (fingerprint.equals(oldFingerprint)
-                        || !isFingerprintSafe(oldFingerprint)
-                        || !RecipeKey.isWireSafe(oldRecipe)) {
-                    continue;
-                }
-                updated.appendTag(createEntry(oldFingerprint, oldRecipe));
-            }
+    public static void rememberInput(
+            @Nullable EntityPlayerMP player,
+            @Nullable String inputFingerprint,
+            @Nullable String recipeKey) {
+        if (player != null) {
+            rememberInput(player.getEntityData(), inputFingerprint, recipeKey);
         }
+    }
 
-        NBTTagCompound root = getRoot(entityData, true);
-        if (root != null) {
-            root.setTag(ENTRIES_TAG, updated);
-        }
+    public static void rememberInput(
+            @Nullable NBTTagCompound entityData,
+            @Nullable String inputFingerprint,
+            @Nullable String recipeKey) {
+        rememberEntry(entityData, INPUT_ENTRIES_TAG, INPUT_FINGERPRINT_TAG, inputFingerprint, recipeKey);
     }
 
     public static void forget(@Nullable EntityPlayerMP player, @Nullable String fingerprint) {
@@ -103,32 +90,17 @@ public final class PlayerRecipePreferences {
     }
 
     public static void forget(@Nullable NBTTagCompound entityData, @Nullable String fingerprint) {
-        if (entityData == null || !isFingerprintSafe(fingerprint)) {
-            return;
-        }
+        forgetEntry(entityData, ENTRIES_TAG, FINGERPRINT_TAG, fingerprint);
+    }
 
-        NBTTagList previous = getEntries(entityData, false);
-        if (previous == null) {
-            return;
+    public static void forgetInput(@Nullable EntityPlayerMP player, @Nullable String inputFingerprint) {
+        if (player != null) {
+            forgetInput(player.getEntityData(), inputFingerprint);
         }
+    }
 
-        NBTTagList updated = new NBTTagList();
-        int count = Math.min(previous.tagCount(), MAX_ENTRIES);
-        for (int index = 0; index < count; index++) {
-            NBTTagCompound entry = previous.getCompoundTagAt(index);
-            String oldFingerprint = entry.getString(FINGERPRINT_TAG);
-            String oldRecipe = entry.getString(RECIPE_TAG);
-            if (fingerprint.equals(oldFingerprint)
-                    || !isFingerprintSafe(oldFingerprint)
-                    || !RecipeKey.isWireSafe(oldRecipe)) {
-                continue;
-            }
-            updated.appendTag(createEntry(oldFingerprint, oldRecipe));
-        }
-        NBTTagCompound root = getRoot(entityData, true);
-        if (root != null) {
-            root.setTag(ENTRIES_TAG, updated);
-        }
+    public static void forgetInput(@Nullable NBTTagCompound entityData, @Nullable String inputFingerprint) {
+        forgetEntry(entityData, INPUT_ENTRIES_TAG, INPUT_FINGERPRINT_TAG, inputFingerprint);
     }
 
     public static int size(@Nullable EntityPlayerMP player) {
@@ -136,11 +108,15 @@ public final class PlayerRecipePreferences {
     }
 
     public static int size(@Nullable NBTTagCompound entityData) {
-        if (entityData == null) {
-            return 0;
-        }
-        NBTTagList entries = getEntries(entityData, false);
-        return entries == null ? 0 : Math.min(entries.tagCount(), MAX_ENTRIES);
+        return entryCount(entityData, ENTRIES_TAG);
+    }
+
+    public static int inputSize(@Nullable EntityPlayerMP player) {
+        return player == null ? 0 : inputSize(player.getEntityData());
+    }
+
+    public static int inputSize(@Nullable NBTTagCompound entityData) {
+        return entryCount(entityData, INPUT_ENTRIES_TAG);
     }
 
     public static void clearAll(@Nullable EntityPlayerMP player) {
@@ -157,28 +133,133 @@ public final class PlayerRecipePreferences {
         persisted.removeTag(ROOT_TAG);
     }
 
-    private static NBTTagCompound createEntry(String fingerprint, String recipeKey) {
+    @Nullable
+    private static String lookupEntry(
+            @Nullable NBTTagCompound entityData,
+            String listTag,
+            String keyTag,
+            @Nullable String key) {
+        if (!isFingerprintSafe(key) || entityData == null) {
+            return null;
+        }
+
+        NBTTagList entries = getEntries(entityData, listTag, false);
+        if (entries == null) {
+            return null;
+        }
+
+        int count = Math.min(entries.tagCount(), MAX_ENTRIES);
+        for (int index = 0; index < count; index++) {
+            NBTTagCompound entry = entries.getCompoundTagAt(index);
+            if (!key.equals(entry.getString(keyTag))) {
+                continue;
+            }
+
+            String recipe = entry.getString(RECIPE_TAG);
+            return RecipeKey.isWireSafe(recipe) ? recipe : null;
+        }
+        return null;
+    }
+
+    private static void rememberEntry(
+            @Nullable NBTTagCompound entityData,
+            String listTag,
+            String keyTag,
+            @Nullable String key,
+            @Nullable String recipeKey) {
+        if (entityData == null || !isFingerprintSafe(key) || !RecipeKey.isWireSafe(recipeKey)) {
+            return;
+        }
+
+        NBTTagList previous = getEntries(entityData, listTag, false);
+        NBTTagList updated = new NBTTagList();
+        updated.appendTag(createEntry(keyTag, key, recipeKey));
+
+        if (previous != null) {
+            int count = Math.min(previous.tagCount(), MAX_ENTRIES);
+            for (int index = 0; index < count && updated.tagCount() < MAX_ENTRIES; index++) {
+                NBTTagCompound entry = previous.getCompoundTagAt(index);
+                String oldKey = entry.getString(keyTag);
+                String oldRecipe = entry.getString(RECIPE_TAG);
+                if (key.equals(oldKey)
+                        || !isFingerprintSafe(oldKey)
+                        || !RecipeKey.isWireSafe(oldRecipe)) {
+                    continue;
+                }
+                updated.appendTag(createEntry(keyTag, oldKey, oldRecipe));
+            }
+        }
+
+        NBTTagCompound root = getRoot(entityData, true);
+        if (root != null) {
+            root.setTag(listTag, updated);
+        }
+    }
+
+    private static void forgetEntry(
+            @Nullable NBTTagCompound entityData,
+            String listTag,
+            String keyTag,
+            @Nullable String key) {
+        if (entityData == null || !isFingerprintSafe(key)) {
+            return;
+        }
+
+        NBTTagList previous = getEntries(entityData, listTag, false);
+        if (previous == null) {
+            return;
+        }
+
+        NBTTagList updated = new NBTTagList();
+        int count = Math.min(previous.tagCount(), MAX_ENTRIES);
+        for (int index = 0; index < count; index++) {
+            NBTTagCompound entry = previous.getCompoundTagAt(index);
+            String oldKey = entry.getString(keyTag);
+            String oldRecipe = entry.getString(RECIPE_TAG);
+            if (key.equals(oldKey)
+                    || !isFingerprintSafe(oldKey)
+                    || !RecipeKey.isWireSafe(oldRecipe)) {
+                continue;
+            }
+            updated.appendTag(createEntry(keyTag, oldKey, oldRecipe));
+        }
+
+        NBTTagCompound root = getRoot(entityData, true);
+        if (root != null) {
+            root.setTag(listTag, updated);
+        }
+    }
+
+    private static int entryCount(@Nullable NBTTagCompound entityData, String listTag) {
+        if (entityData == null) {
+            return 0;
+        }
+        NBTTagList entries = getEntries(entityData, listTag, false);
+        return entries == null ? 0 : Math.min(entries.tagCount(), MAX_ENTRIES);
+    }
+
+    private static NBTTagCompound createEntry(String keyTag, String key, String recipeKey) {
         NBTTagCompound entry = new NBTTagCompound();
-        entry.setString(FINGERPRINT_TAG, fingerprint);
+        entry.setString(keyTag, key);
         entry.setString(RECIPE_TAG, recipeKey);
         return entry;
     }
 
     @Nullable
-    private static NBTTagList getEntries(NBTTagCompound entityData, boolean create) {
+    private static NBTTagList getEntries(NBTTagCompound entityData, String listTag, boolean create) {
         NBTTagCompound root = getRoot(entityData, create);
         if (root == null) {
             return null;
         }
-        if (!root.hasKey(ENTRIES_TAG, Constants.NBT.TAG_LIST)) {
+        if (!root.hasKey(listTag, Constants.NBT.TAG_LIST)) {
             if (!create) {
                 return null;
             }
             NBTTagList list = new NBTTagList();
-            root.setTag(ENTRIES_TAG, list);
+            root.setTag(listTag, list);
             return list;
         }
-        return root.getTagList(ENTRIES_TAG, Constants.NBT.TAG_COMPOUND);
+        return root.getTagList(listTag, Constants.NBT.TAG_COMPOUND);
     }
 
     @Nullable

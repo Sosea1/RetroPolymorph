@@ -1,17 +1,15 @@
 package dev.sosea1.retropolymorph.compat.fastsuite;
 
+import dev.sosea1.retropolymorph.core.RecipeProbe;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.Loader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -20,97 +18,62 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Optional bridge to the current FastSuite112 all-match API.
+ * Optional bridge to Retro FastSuite's conservative candidate API.
  *
- * <p>There are deliberately only two modes:</p>
- * <ul>
- *     <li>FastSuite installed: use {@code FastSuiteAPI.visitMatchingRecipes(...)}.</li>
- *     <li>FastSuite absent: caller performs the normal complete Forge registry scan.</li>
- * </ul>
- *
- * <p>RetroPolymorph is developed together with FastSuite, so old FastSuite API generations are not
- * supported here. Reflection exists only so FastSuite remains an optional runtime dependency.</p>
+ * <p>FastSuite only narrows the ordered candidate set here. RetroPolymorph still
+ * executes {@link IRecipe#matches} through {@link RecipeProbe}, so one broken
+ * third-party recipe cannot disable the accelerator and force a second full
+ * registry scan.</p>
  */
 public final class FastSuiteInterop {
 
     private static final Logger LOGGER = LogManager.getLogger("Retro Polymorph");
-    private static final String MOD_ID = "fastsuite112";
-    private static final String API_CLASS = "dev.sosea1.fastsuite112.api.FastSuiteAPI";
-    private static final String VISITOR_CLASS = "dev.sosea1.fastsuite112.api.RecipeMatchVisitor";
+
+    private static final String[] API_CLASSES = {
+            "com.sosea1.fastsuite112.api.FastSuiteAPI",
+            "dev.sosea1.fastsuite112.api.FastSuiteAPI"
+    };
 
     private static final AtomicLong FAILURES = new AtomicLong();
     private static final ConcurrentMap<String, Boolean> REPORTED_FAILURES =
             new ConcurrentHashMap<String, Boolean>();
 
     private static volatile boolean initialized;
-    private static volatile Method visitMatchingRecipes;
-    private static volatile Class<?> visitorType;
+    private static volatile Method getCandidateRecipes;
+    private static volatile String resolvedApiClass;
     private static volatile Mode lastMode = Mode.FORGE_REGISTRY;
 
     private FastSuiteInterop() {
     }
 
     public enum Mode {
-        FASTSUITE_VISITOR,
+        FASTSUITE_CANDIDATES,
         FORGE_REGISTRY
     }
 
     public static boolean isInstalled() {
-        return Loader.isModLoaded(MOD_ID);
+        return ensureCurrentApi();
     }
 
     /**
-     * Use the current FastSuite ordered all-match visitor when FastSuite is installed.
+     * Returns every matching recipe in exact FastSuite/Forge registry order.
      *
-     * @return complete matching recipes in Forge registry order; null when FastSuite is absent or
-     * the current integration failed and the caller should use the complete Forge registry scan.
+     * @return matching recipes, or {@code null} when FastSuite is absent or its
+     * optional API bridge is unavailable and the caller should use a complete
+     * Forge registry scan.
      */
     @Nullable
     public static List<IRecipe> findAllMatches(InventoryCrafting matrix, World world) {
-        if (matrix == null || world == null || !isInstalled()) {
+        if (matrix == null || world == null) {
             return null;
         }
-
         if (!ensureCurrentApi()) {
             return null;
         }
 
-        final List<IRecipe> matches = new ArrayList<IRecipe>(4);
+        final Object rawCandidates;
         try {
-            Object visitor = Proxy.newProxyInstance(
-                    visitorType.getClassLoader(),
-                    new Class<?>[] { visitorType },
-                    new InvocationHandler() {
-                        @Override
-                        public Object invoke(Object proxy, Method method, Object[] args) {
-                            String name = method.getName();
-                            if ("visit".equals(name)
-                                    && args != null
-                                    && args.length == 1
-                                    && args[0] instanceof IRecipe) {
-                                matches.add((IRecipe) args[0]);
-                                return Boolean.TRUE;
-                            }
-                            if (method.getDeclaringClass() == Object.class) {
-                                if ("toString".equals(name)) {
-                                    return "RetroPolymorphFastSuiteVisitor";
-                                }
-                                if ("hashCode".equals(name)) {
-                                    return System.identityHashCode(proxy);
-                                }
-                                if ("equals".equals(name)) {
-                                    return args != null && args.length == 1 && proxy == args[0];
-                                }
-                            }
-                            throw new UnsupportedOperationException("Unexpected FastSuite visitor method: " + method);
-                        }
-                    });
-
-            visitMatchingRecipes.invoke(null, matrix, world, visitor);
-            lastMode = Mode.FASTSUITE_VISITOR;
-            return matches.isEmpty()
-                    ? Collections.<IRecipe>emptyList()
-                    : Collections.unmodifiableList(new ArrayList<IRecipe>(matches));
+            rawCandidates = getCandidateRecipes.invoke(null, matrix);
         } catch (IllegalAccessException | LinkageError | RuntimeException exception) {
             reportFailure(exception);
             return null;
@@ -119,6 +82,33 @@ public final class FastSuiteInterop {
             reportFailure(cause == null ? exception : cause);
             return null;
         }
+
+        if (!(rawCandidates instanceof Iterable)) {
+            reportFailure(new IllegalStateException(
+                    "FastSuite candidate API returned "
+                            + (rawCandidates == null ? "null" : rawCandidates.getClass().getName())));
+            return null;
+        }
+
+        List<IRecipe> matches = new ArrayList<IRecipe>(4);
+        try {
+            for (Object candidate : (Iterable<?>) rawCandidates) {
+                if (candidate instanceof IRecipe
+                        && RecipeProbe.matches((IRecipe) candidate, matrix, world)) {
+                    matches.add((IRecipe) candidate);
+                }
+            }
+        } catch (LinkageError | RuntimeException exception) {
+            // Fail open if the candidate iterable itself is broken. Individual
+            // recipe.matches() failures are already isolated by RecipeProbe.
+            reportFailure(exception);
+            return null;
+        }
+
+        lastMode = Mode.FASTSUITE_CANDIDATES;
+        return matches.isEmpty()
+                ? Collections.<IRecipe>emptyList()
+                : Collections.unmodifiableList(matches);
     }
 
     public static Mode getLastMode() {
@@ -140,33 +130,52 @@ public final class FastSuiteInterop {
 
     private static boolean ensureCurrentApi() {
         if (initialized) {
-            return visitMatchingRecipes != null && visitorType != null;
+            return getCandidateRecipes != null;
         }
 
         synchronized (FastSuiteInterop.class) {
             if (initialized) {
-                return visitMatchingRecipes != null && visitorType != null;
+                return getCandidateRecipes != null;
             }
 
-            try {
-                ClassLoader loader = FastSuiteInterop.class.getClassLoader();
-                Class<?> api = Class.forName(API_CLASS, false, loader);
-                visitorType = Class.forName(VISITOR_CLASS, false, loader);
-                visitMatchingRecipes = api.getMethod(
-                        "visitMatchingRecipes",
-                        InventoryCrafting.class,
-                        World.class,
-                        visitorType);
-                LOGGER.info("FastSuite112 detected; RetroPolymorph will use visitMatchingRecipes for conflict scans");
-            } catch (ClassNotFoundException | NoSuchMethodException | LinkageError | RuntimeException exception) {
-                visitMatchingRecipes = null;
-                visitorType = null;
-                reportFailure(exception);
-            } finally {
-                initialized = true;
+            ClassLoader loader = FastSuiteInterop.class.getClassLoader();
+            Throwable lastFailure = null;
+            boolean apiClassFound = false;
+            for (String className : API_CLASSES) {
+                try {
+                    Class<?> api = Class.forName(className, false, loader);
+                    apiClassFound = true;
+                    Method candidates;
+                    try {
+                        candidates = api.getMethod("getCandidateRecipes", InventoryCrafting.class);
+                    } catch (NoSuchMethodException missingCurrentName) {
+                        // Compatibility with the early alpha API while keeping
+                        // the current release package as the primary path.
+                        candidates = api.getMethod("getCraftingCandidates", InventoryCrafting.class);
+                    }
+                    getCandidateRecipes = candidates;
+                    resolvedApiClass = className;
+                    LOGGER.info(
+                            "Retro FastSuite detected; RetroPolymorph will use {}#{} for conflict candidate scans",
+                            className,
+                            candidates.getName());
+                    break;
+                } catch (ClassNotFoundException absent) {
+                    lastFailure = absent;
+                } catch (NoSuchMethodException | LinkageError | RuntimeException exception) {
+                    apiClassFound = true;
+                    lastFailure = exception;
+                }
             }
 
-            return visitMatchingRecipes != null && visitorType != null;
+            initialized = true;
+            // FastSuite is optional. Missing API classes are the normal absent-mod
+            // case and should not produce a warning/failure counter. If one of
+            // the known API classes exists but its contract is unusable, report it.
+            if (getCandidateRecipes == null && apiClassFound && lastFailure != null) {
+                reportFailure(lastFailure);
+            }
+            return getCandidateRecipes != null;
         }
     }
 
@@ -177,8 +186,9 @@ public final class FastSuiteInterop {
             return;
         }
         LOGGER.warn(
-                "Current FastSuite112 visitMatchingRecipes integration failed; using complete Forge recipe scan for correctness ({})",
+                "Retro FastSuite candidate integration failed; using complete Forge recipe scan for correctness (api={}, cause={})",
+                resolvedApiClass == null ? "unresolved" : resolvedApiClass,
                 exception == null ? "unknown failure" : exception.toString());
-        LOGGER.debug("FastSuite112 integration failure details", exception);
+        LOGGER.debug("Retro FastSuite integration failure details", exception);
     }
 }

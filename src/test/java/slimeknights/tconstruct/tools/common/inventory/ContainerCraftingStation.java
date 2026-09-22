@@ -69,6 +69,11 @@ public class ContainerCraftingStation extends Container {
         public InventoryCrafting retropolymorph$getCraftMatrix() {
             return this.matrix;
         }
+
+        @Override
+        public EntityPlayer retropolymorph$getPlayer() {
+            return null;
+        }
     }
 
     private final StubMatrix matrix;

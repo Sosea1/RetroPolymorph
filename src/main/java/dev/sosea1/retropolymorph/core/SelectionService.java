@@ -6,10 +6,13 @@ import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.api.SelectionPersistencePolicy;
 import dev.sosea1.retropolymorph.api.SelectionReason;
 import dev.sosea1.retropolymorph.preference.ConflictFingerprint;
+import dev.sosea1.retropolymorph.preference.InputFingerprint;
+import dev.sosea1.retropolymorph.preference.InputPreferenceKeys;
 import dev.sosea1.retropolymorph.preference.PlayerRecipePreferences;
 import dev.sosea1.retropolymorph.preference.RecipePreferencePolicy;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
@@ -49,6 +52,7 @@ public final class SelectionService {
                     false, Collections.<RecipeOption>emptyList(), null, SelectionReason.NATIVE_DEFAULT, false);
         }
 
+        String inputFingerprint = InputFingerprint.create(context);
         List<RecipeOption> options = SelectionContextGuard.findOptions(context, world);
         if (options == null) {
             SelectionContextGuard.clear(context);
@@ -61,10 +65,29 @@ public final class SelectionService {
         SelectionPersistencePolicy persistence = context.getPersistencePolicy();
         boolean accepted = true;
         SelectionReason reason = SelectionReason.NATIVE_DEFAULT;
+        boolean staleSelectionCleared = command.isQuery()
+                && selectedBefore != null
+                && !containsOption(options, selectedBefore);
+
+        if (staleSelectionCleared) {
+            // Preseeding runs before CraftingManager would normally notice that
+            // the matrix changed. Drop the old matrix choice now so it cannot
+            // suppress the saved preference for this new conflict.
+            SelectionContextGuard.clear(context);
+        }
 
         if (command.isClear()) {
-            if (persistence.supportsPlayerPreferences() && fingerprint != null && playerEntityData != null) {
-                PlayerRecipePreferences.forget(playerEntityData, fingerprint);
+            if (persistence.supportsPlayerPreferences() && playerEntityData != null) {
+                String rememberedRecipe = fingerprint == null
+                        ? selectedBefore
+                        : PlayerRecipePreferences.lookup(playerEntityData, fingerprint);
+                if (fingerprint != null) {
+                    PlayerRecipePreferences.forget(playerEntityData, fingerprint);
+                }
+                forgetInputAliases(playerEntityData, context, rememberedRecipe, world);
+                if (inputFingerprint != null) {
+                    PlayerRecipePreferences.forgetInput(playerEntityData, inputFingerprint);
+                }
             }
             SelectionContextGuard.clear(context);
             reason = applyPolicyDefault(world, context, options);
@@ -74,8 +97,11 @@ public final class SelectionService {
                     && containsOption(options, recipeKey)
                     && SelectionContextGuard.select(context, recipeKey, world);
             if (accepted) {
-                if (persistence.supportsPlayerPreferences() && fingerprint != null && playerEntityData != null) {
-                    PlayerRecipePreferences.remember(playerEntityData, fingerprint, recipeKey);
+                if (persistence.supportsPlayerPreferences() && playerEntityData != null) {
+                    if (fingerprint != null) {
+                        PlayerRecipePreferences.remember(playerEntityData, fingerprint, recipeKey);
+                    }
+                    rememberInputAliases(playerEntityData, context, recipeKey, world);
                 }
                 reason = SelectionReason.PLAYER_SELECTION;
             } else {
@@ -95,6 +121,24 @@ public final class SelectionService {
             selectedAfter = null;
             accepted = false;
             reason = SelectionReason.NATIVE_DEFAULT;
+        }
+
+        if (command.isQuery()
+                && reason == SelectionReason.PLAYER_PREFERENCE
+                && selectedAfter != null
+                && inputFingerprint != null
+                && persistence.supportsPlayerPreferences()
+                && playerEntityData != null) {
+            // Populate/refresh the cheap recipe-aware input aliases after
+            // the canonical conflict preference has been authoritatively resolved.
+            rememberInputAliases(playerEntityData, context, selectedAfter, world);
+        }
+
+        if (staleSelectionCleared && selectedAfter == null) {
+            // Preserve the query contract: merely discarding a stale state is
+            // not an accepted selection. A valid preference or policy choice
+            // selected above remains accepted.
+            accepted = false;
         }
 
         boolean selectionChanged = !sameRecipeKey(selectedBefore, selectedAfter);
@@ -162,6 +206,30 @@ public final class SelectionService {
             }
         }
         return false;
+    }
+
+    private static void rememberInputAliases(
+            NBTTagCompound playerEntityData,
+            SelectionContext context,
+            String recipeKey,
+            @Nullable World world) {
+        ResourceLocation recipeId = RecipeKey.parseForgeId(recipeKey);
+        IRecipe recipe = recipeId == null ? null : ForgeRegistries.RECIPES.getValue(recipeId);
+        for (String key : InputPreferenceKeys.storageKeys(context, recipe, world)) {
+            PlayerRecipePreferences.rememberInput(playerEntityData, key, recipeKey);
+        }
+    }
+
+    private static void forgetInputAliases(
+            NBTTagCompound playerEntityData,
+            SelectionContext context,
+            @Nullable String recipeKey,
+            @Nullable World world) {
+        ResourceLocation recipeId = RecipeKey.parseForgeId(recipeKey);
+        IRecipe recipe = recipeId == null ? null : ForgeRegistries.RECIPES.getValue(recipeId);
+        for (String key : InputPreferenceKeys.storageKeys(context, recipe, world)) {
+            PlayerRecipePreferences.forgetInput(playerEntityData, key);
+        }
     }
 
     private static boolean sameRecipeKey(@Nullable String first, @Nullable String second) {

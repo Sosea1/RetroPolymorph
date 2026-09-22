@@ -5,6 +5,7 @@ import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.api.SelectionPersistencePolicy;
 import dev.sosea1.retropolymorph.api.SelectionReason;
 import dev.sosea1.retropolymorph.preference.ConflictFingerprint;
+import dev.sosea1.retropolymorph.preference.InputFingerprint;
 import dev.sosea1.retropolymorph.preference.PlayerRecipePreferences;
 import dev.sosea1.retropolymorph.preference.RecipePreferencePolicy;
 import net.minecraft.init.Bootstrap;
@@ -113,7 +114,9 @@ public final class SelectionServiceTest {
         // Select mod:a and verify preference stored
         SelectionService.handle(null, this.playerData, ctx, SelectionCommand.select("mod:a"));
         String fingerprint = ConflictFingerprint.create(options);
+        String inputFingerprint = InputFingerprint.create(ctx);
         assertEquals("mod:a", PlayerRecipePreferences.lookup(this.playerData, fingerprint));
+        assertEquals("mod:a", PlayerRecipePreferences.lookupInput(this.playerData, inputFingerprint));
 
         // Clear selection and verify preference forgotten
         SelectionServiceResult clearResult = SelectionService.handle(
@@ -121,6 +124,7 @@ public final class SelectionServiceTest {
         assertTrue(clearResult.isAccepted());
         assertNull(clearResult.getSelectedRecipeKey());
         assertNull(PlayerRecipePreferences.lookup(this.playerData, fingerprint));
+        assertNull(PlayerRecipePreferences.lookupInput(this.playerData, inputFingerprint));
         assertTrue(clearResult.isSelectionChanged());
     }
 
@@ -141,6 +145,9 @@ public final class SelectionServiceTest {
         SelectionServiceResult result = SelectionService.handle(null, this.playerData, ctx, SelectionCommand.query());
         assertEquals("mod:player", result.getSelectedRecipeKey());
         assertEquals(SelectionReason.PLAYER_PREFERENCE, result.getReason());
+        assertEquals(
+                "mod:player",
+                PlayerRecipePreferences.lookupInput(this.playerData, InputFingerprint.create(ctx)));
     }
 
     @Test
@@ -267,6 +274,7 @@ public final class SelectionServiceTest {
     private static final class MockContext implements SelectionContext {
         private final List<RecipeOption> options;
         private final SelectionPersistencePolicy policy;
+        private final ItemStack input = new ItemStack(testItem, 1, 0);
         @Nullable String selectedKey;
 
         MockContext(List<RecipeOption> options, SelectionPersistencePolicy policy) {
@@ -276,8 +284,8 @@ public final class SelectionServiceTest {
 
         @Override public Container getContainer() { return null; }
         @Override public Slot getResultSlot() { return null; }
-        @Override public int getInputCount() { return 0; }
-        @Override public ItemStack getInputStack(int index) { return ItemStack.EMPTY; }
+        @Override public int getInputCount() { return 1; }
+        @Override public ItemStack getInputStack(int index) { return index == 0 ? this.input : ItemStack.EMPTY; }
         @Override public List<RecipeOption> findOptions(World world) { return this.options; }
         @Override public boolean select(String recipeKey, World world) {
             this.selectedKey = recipeKey;

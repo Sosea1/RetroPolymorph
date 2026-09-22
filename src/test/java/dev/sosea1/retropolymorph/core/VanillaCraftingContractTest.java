@@ -67,6 +67,11 @@ public class VanillaCraftingContractTest extends AdapterContractTestBase<Vanilla
         public InventoryCrafting retropolymorph$getCraftMatrix() {
             return this.matrix;
         }
+
+        @Override
+        public EntityPlayer retropolymorph$getPlayer() {
+            return null;
+        }
     }
 
     public static class TestWorkbenchContainer extends Container {

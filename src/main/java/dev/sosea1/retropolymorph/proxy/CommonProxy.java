@@ -1,6 +1,7 @@
 package dev.sosea1.retropolymorph.proxy;
 
 import dev.sosea1.retropolymorph.network.RecipeSelectionHandler;
+import dev.sosea1.retropolymorph.core.CraftingPreferenceSeeder;
 import dev.sosea1.retropolymorph.compat.tconstruct.TinkersSharedSelectionRegistry;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -27,6 +28,7 @@ public class CommonProxy {
             return;
         }
         TinkersSharedSelectionRegistry.onContainerClosed(event.getContainer());
+        CraftingPreferenceSeeder.onContainerClosed(event.getContainer());
         if (!event.getEntityPlayer().world.isRemote) {
             RecipeSelectionHandler.onContainerClosed(
                     event.getEntityPlayer().getUniqueID(),
@@ -45,6 +47,7 @@ public class CommonProxy {
 
     public void onServerStopping() {
         TinkersSharedSelectionRegistry.reset();
+        CraftingPreferenceSeeder.reset();
         dev.sosea1.retropolymorph.core.SharedSelectionViewerRegistry.reset();
     }
 }
