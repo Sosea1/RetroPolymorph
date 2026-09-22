@@ -2,6 +2,7 @@ package dev.sosea1.retropolymorph.core;
 
 import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeSelectionContext;
+import dev.sosea1.retropolymorph.api.AdapterDetectionResult;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.api.SelectionPersistencePolicy;
 import dev.sosea1.retropolymorph.mixin.SlotCraftingAccessor;
@@ -275,14 +276,15 @@ public final class CraftingPreferenceSeeder {
         if (cached != null) {
             return cached;
         }
-        SelectionContext detected = SelectionContextDetector.detect(container);
+        AdapterDetectionResult result = SelectionContextDetector.probe(container);
+        SelectionContext detected = result.getContext();
         if (detected != null) {
             CONTEXT_CACHE.put(container, new WeakReference<SelectionContext>(detected));
             CONTEXT_MISSES.remove(container);
-        } else if (reference != null) {
+        } else if (result.isMiss() && reference != null) {
             CONTEXT_CACHE.remove(container);
             CONTEXT_MISSES.put(container, Boolean.TRUE);
-        } else {
+        } else if (result.isMiss()) {
             CONTEXT_MISSES.put(container, Boolean.TRUE);
         }
         return detected;

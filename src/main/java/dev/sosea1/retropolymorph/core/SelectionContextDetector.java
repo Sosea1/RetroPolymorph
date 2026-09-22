@@ -16,23 +16,33 @@ public final class SelectionContextDetector {
 
     @Nullable
     public static SelectionContext detect(Container container) {
+        AdapterDetectionResult result = probe(container);
+        return result.isMatch() ? result.getContext() : null;
+    }
+
+    /**
+     * Preserves whether a recognized adapter is temporarily blocking generic
+     * fallback, so callers that cache misses do not turn that state permanent.
+     */
+    public static AdapterDetectionResult probe(Container container) {
         if (container == null) {
-            return null;
+            return AdapterDetectionResult.miss();
         }
         AdapterDetectionResult result = RecipeSelectionAdapters.probe(container);
         if (result.isMatch()) {
-            return result.getContext();
+            return result;
         }
         if (result.isBlockFallback()) {
-            return null;
+            return result;
         }
 
         SelectionContext crafting = CraftingContextDetector.detect(container);
         SelectionContext furnace = FurnaceContextDetector.detect(container);
 
         if (crafting != null && furnace != null) {
-            return null;
+            return AdapterDetectionResult.blockFallback();
         }
-        return crafting != null ? crafting : furnace;
+        SelectionContext context = crafting != null ? crafting : furnace;
+        return context == null ? AdapterDetectionResult.miss() : AdapterDetectionResult.match(context);
     }
 }
