@@ -170,6 +170,26 @@ public final class SelectionServiceTest {
     }
 
     @Test
+    public void canonicalPreferenceOverridesProvisionalPreseedWhenOverrideIsDisabled() {
+        List<RecipeOption> options = Arrays.asList(
+                new RecipeOption("mod:preseed", new ItemStack(testItem, 1)),
+                new RecipeOption("mod:canonical", new ItemStack(testItem, 2)));
+        MockContext ctx = new MockContext(options, SelectionPersistencePolicy.PLAYER_PERSISTENT);
+        ctx.select("mod:preseed", null);
+        CraftingPreferenceSeeder.markProvisional(ctx, "mod:preseed");
+
+        String fingerprint = ConflictFingerprint.create(options);
+        PlayerRecipePreferences.remember(this.playerData, fingerprint, "mod:canonical");
+
+        SelectionServiceResult result = SelectionService.handle(
+                null, this.playerData, ctx, SelectionCommand.query());
+
+        assertEquals("mod:canonical", result.getSelectedRecipeKey());
+        assertEquals(SelectionReason.PLAYER_PREFERENCE, result.getReason());
+        assertTrue(result.isSelectionChanged());
+    }
+
+    @Test
     public void contextOptingIntoOverrideReplacesCurrentSelectionFromStoredPreference() {
         List<RecipeOption> options = Arrays.asList(
                 new RecipeOption("mod:current", new ItemStack(testItem, 1)),

@@ -36,8 +36,12 @@ public final class CraftingPreferenceSeeder {
 
     private static final Map<Container, WeakReference<SelectionContext>> CONTEXT_CACHE =
             new WeakHashMap<Container, WeakReference<SelectionContext>>();
+    private static final Map<Container, Boolean> CONTEXT_MISSES =
+            new WeakHashMap<Container, Boolean>();
     private static final Map<Container, String> LAST_INPUT =
             new WeakHashMap<Container, String>();
+    private static final Map<SelectionContext, String> PROVISIONAL_SELECTIONS =
+            new WeakHashMap<SelectionContext, String>();
 
     private CraftingPreferenceSeeder() {
     }
@@ -49,6 +53,9 @@ public final class CraftingPreferenceSeeder {
      */
     public static void preseed(InventoryCrafting matrix, Container container) {
         if (matrix == null || container == null) {
+            return;
+        }
+        if (!isMatrixOwnedBy(container, matrix)) {
             return;
         }
 
@@ -77,6 +84,7 @@ public final class CraftingPreferenceSeeder {
                 inputFingerprint);
         if (preferred != null) {
             RecipeSelectionSeeder.seed(matrix, preferred);
+            markProvisional(context, preferred.toString());
         }
     }
 
@@ -131,6 +139,7 @@ public final class CraftingPreferenceSeeder {
                 return;
             }
             if (SelectionContextGuard.select(context, preferred, world)) {
+                markProvisional(context, preferred);
                 return;
             }
             PlayerRecipePreferences.forgetInput(playerData, key);
@@ -174,6 +183,7 @@ public final class CraftingPreferenceSeeder {
                 return;
             }
             if (SelectionContextGuard.select(context, preferred, player.world)) {
+                markProvisional(context, preferred);
                 return;
             }
             // Input aliases are only accelerators. Invalid aliases are dropped
@@ -257,6 +267,9 @@ public final class CraftingPreferenceSeeder {
 
     @Nullable
     private static synchronized SelectionContext detect(Container container) {
+        if (CONTEXT_MISSES.containsKey(container)) {
+            return null;
+        }
         WeakReference<SelectionContext> reference = CONTEXT_CACHE.get(container);
         SelectionContext cached = reference == null ? null : reference.get();
         if (cached != null) {
@@ -265,10 +278,26 @@ public final class CraftingPreferenceSeeder {
         SelectionContext detected = SelectionContextDetector.detect(container);
         if (detected != null) {
             CONTEXT_CACHE.put(container, new WeakReference<SelectionContext>(detected));
+            CONTEXT_MISSES.remove(container);
         } else if (reference != null) {
             CONTEXT_CACHE.remove(container);
+            CONTEXT_MISSES.put(container, Boolean.TRUE);
+        } else {
+            CONTEXT_MISSES.put(container, Boolean.TRUE);
         }
         return detected;
+    }
+
+    static boolean isMatrixOwnedBy(Container container, InventoryCrafting matrix) {
+        if (container == null || matrix == null) {
+            return false;
+        }
+        for (Slot slot : container.inventorySlots) {
+            if (slot != null && slot.inventory == matrix) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Nullable
@@ -290,12 +319,31 @@ public final class CraftingPreferenceSeeder {
     public static synchronized void onContainerClosed(Container container) {
         if (container != null) {
             CONTEXT_CACHE.remove(container);
+            CONTEXT_MISSES.remove(container);
             LAST_INPUT.remove(container);
+        }
+    }
+
+    static synchronized void markProvisional(SelectionContext context, String recipeKey) {
+        if (context != null && RecipeKey.isWireSafe(recipeKey)) {
+            PROVISIONAL_SELECTIONS.put(context, recipeKey);
+        }
+    }
+
+    static synchronized boolean isProvisional(SelectionContext context, String recipeKey) {
+        return context != null && recipeKey != null && recipeKey.equals(PROVISIONAL_SELECTIONS.get(context));
+    }
+
+    static synchronized void clearProvisional(SelectionContext context) {
+        if (context != null) {
+            PROVISIONAL_SELECTIONS.remove(context);
         }
     }
 
     public static synchronized void reset() {
         CONTEXT_CACHE.clear();
+        CONTEXT_MISSES.clear();
         LAST_INPUT.clear();
+        PROVISIONAL_SELECTIONS.clear();
     }
 }

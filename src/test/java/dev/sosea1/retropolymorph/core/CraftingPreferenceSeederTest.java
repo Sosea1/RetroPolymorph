@@ -6,7 +6,9 @@ import dev.sosea1.retropolymorph.api.SelectionPersistencePolicy;
 import dev.sosea1.retropolymorph.preference.InputFingerprint;
 import dev.sosea1.retropolymorph.preference.PlayerRecipePreferences;
 import net.minecraft.init.Bootstrap;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
+import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -19,7 +21,9 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class CraftingPreferenceSeederTest {
 
@@ -55,6 +59,22 @@ public final class CraftingPreferenceSeederTest {
 
         assertNull(context.getSelectedRecipeKey());
         assertEquals(0, context.findOptionsCalls);
+    }
+
+    @Test
+    public void genericPreseedOnlyAcceptsAMatrixOwnedByTheContainerSlots() {
+        TestContainer owner = new TestContainer();
+        InventoryCrafting owned = new InventoryCrafting(owner, 3, 3);
+        owner.addTestSlot(new Slot(owned, 0, 0, 0));
+        InventoryCrafting scratch = new InventoryCrafting(new TestContainer(), 3, 3);
+
+        assertTrue(CraftingPreferenceSeeder.isMatrixOwnedBy(owner, owned));
+        assertFalse(CraftingPreferenceSeeder.isMatrixOwnedBy(owner, scratch));
+    }
+
+    private static final class TestContainer extends Container {
+        void addTestSlot(Slot slot) { this.addSlotToContainer(slot); }
+        @Override public boolean canInteractWith(EntityPlayer playerIn) { return true; }
     }
 
     private static final class StubContext implements SelectionContext {

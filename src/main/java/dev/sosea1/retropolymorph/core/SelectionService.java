@@ -74,6 +74,7 @@ public final class SelectionService {
             // the matrix changed. Drop the old matrix choice now so it cannot
             // suppress the saved preference for this new conflict.
             SelectionContextGuard.clear(context);
+            CraftingPreferenceSeeder.clearProvisional(context);
         }
 
         if (command.isClear()) {
@@ -90,6 +91,7 @@ public final class SelectionService {
                 }
             }
             SelectionContextGuard.clear(context);
+            CraftingPreferenceSeeder.clearProvisional(context);
             reason = applyPolicyDefault(world, context, options);
         } else if (command.isSelect()) {
             String recipeKey = command.getRecipeKey();
@@ -97,6 +99,7 @@ public final class SelectionService {
                     && containsOption(options, recipeKey)
                     && SelectionContextGuard.select(context, recipeKey, world);
             if (accepted) {
+                CraftingPreferenceSeeder.clearProvisional(context);
                 if (persistence.supportsPlayerPreferences() && playerEntityData != null) {
                     if (fingerprint != null) {
                         PlayerRecipePreferences.remember(playerEntityData, fingerprint, recipeKey);
@@ -157,12 +160,16 @@ public final class SelectionService {
         if (fingerprint != null && persistence.supportsPlayerPreferences() && playerEntityData != null) {
             String preferred = PlayerRecipePreferences.lookup(playerEntityData, fingerprint);
             if (preferred != null
-                    && (current == null || persistence.playerPreferenceOverridesCurrent())) {
+                    && (current == null
+                    || persistence.playerPreferenceOverridesCurrent()
+                    || CraftingPreferenceSeeder.isProvisional(context, current))) {
                 if (preferred.equals(current)) {
+                    CraftingPreferenceSeeder.clearProvisional(context);
                     return SelectionReason.PLAYER_PREFERENCE;
                 }
                 if (containsOption(options, preferred)
                         && SelectionContextGuard.select(context, preferred, world)) {
+                    CraftingPreferenceSeeder.clearProvisional(context);
                     return SelectionReason.PLAYER_PREFERENCE;
                 }
                 PlayerRecipePreferences.forget(playerEntityData, fingerprint);

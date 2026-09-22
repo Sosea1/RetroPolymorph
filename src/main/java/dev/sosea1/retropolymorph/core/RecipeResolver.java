@@ -53,7 +53,7 @@ public final class RecipeResolver {
         long started = System.nanoTime();
 
         // Exactly two lookup modes:
-        // 1) current FastSuite ordered all-match visitor when FastSuite is installed;
+        // 1) current FastSuite conservative candidate API when FastSuite is available;
         // 2) complete Forge registry scan when FastSuite is absent or its current API failed.
         List<IRecipe> fastSuiteMatches = FastSuiteInterop.findAllMatches(clean, world);
         if (fastSuiteMatches != null) {
