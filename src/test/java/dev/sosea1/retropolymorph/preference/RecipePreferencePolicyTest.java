@@ -123,55 +123,6 @@ public final class RecipePreferencePolicyTest {
     }
 
     @Test
-    public void testSyntheticNamespaceParticipatesInPreferredMods() {
-        RecipePreferencePolicy.configure(
-                Arrays.asList("mekanism", "*", "minecraft"),
-                Collections.<String>emptyList(),
-                true);
-
-        RecipeOption vanilla = new RecipeOption(
-                "smelt:minecraft:ore@0>minecraft:ingot@0x1#0",
-                new ItemStack(Items.IRON_INGOT),
-                "minecraft");
-        RecipeOption mekanism = new RecipeOption(
-                "smelt:minecraft:ore@0>mekanism:ingot@0x1#0",
-                new ItemStack(Items.GOLD_INGOT),
-                "mekanism");
-
-        PreferenceDecision decision = RecipePreferencePolicy.decide(Arrays.asList(vanilla, mekanism));
-        assertEquals(mekanism.getRecipeKey(), decision.getRecipeKey());
-        assertEquals(SelectionReason.MOD_PRIORITY, decision.getReason());
-    }
-
-    @Test
-    public void testAutomaticModdedPreferenceCanBeDisabled() {
-        RecipeOption vanilla = new RecipeOption(
-                "smelt:minecraft:ore@0>minecraft:ingot@0x1#0",
-                new ItemStack(Items.IRON_INGOT),
-                "minecraft");
-        RecipeOption modded = new RecipeOption(
-                "smelt:minecraft:ore@0>modded:ingot@0x1#0",
-                new ItemStack(Items.GOLD_INGOT),
-                "modded");
-
-        RecipePreferencePolicy.configure(
-                Collections.<String>emptyList(),
-                Collections.<String>emptyList(),
-                true);
-        PreferenceDecision enabled = RecipePreferencePolicy.decide(Arrays.asList(vanilla, modded));
-        assertEquals(modded.getRecipeKey(), enabled.getRecipeKey());
-        assertEquals(SelectionReason.AUTOMATIC_MODDED, enabled.getReason());
-
-        RecipePreferencePolicy.configure(
-                Collections.<String>emptyList(),
-                Collections.<String>emptyList(),
-                false);
-        PreferenceDecision disabled = RecipePreferencePolicy.decide(Arrays.asList(vanilla, modded));
-        assertNull(disabled.getRecipeKey());
-        assertEquals(SelectionReason.NATIVE_DEFAULT, disabled.getReason());
-    }
-
-    @Test
     public void testExactRecipeBeatsModPriority() {
         RecipePreferencePolicy.configure(
                 Arrays.asList("thermalfoundation", "*"),

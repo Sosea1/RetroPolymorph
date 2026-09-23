@@ -308,7 +308,7 @@ public final class RecipePreferencePolicy {
                 buckets[i] = Integer.MAX_VALUE;
                 continue;
             }
-            String namespace = policyNamespace(option);
+            String namespace = extractNamespace(option.getRecipeKey());
             if (namespace.isEmpty()) {
                 buckets[i] = Integer.MAX_VALUE;
                 continue;
@@ -353,66 +353,46 @@ public final class RecipePreferencePolicy {
 
     @Nullable
     private static String chooseFirstModdedRecipe(List<RecipeOption> options) {
-        boolean firstEligibleRecipeSeen = false;
-        boolean naturalDefaultIsVanilla = false;
+        boolean firstForgeRecipeSeen = false;
+        boolean naturalForgeDefaultIsVanilla = false;
 
         for (RecipeOption option : options) {
             if (option == null) {
                 continue;
             }
 
-            String namespace = automaticPreferenceNamespace(option);
-            if (namespace.isEmpty()) {
+            ResourceLocation id;
+            try {
+                id = RecipeKey.parseForgeId(option.getRecipeKey());
+                if (id == null) {
+                    continue;
+                }
+                try {
+                    if (ForgeRegistries.RECIPES != null && ForgeRegistries.RECIPES.getValue(id) == null) {
+                        continue;
+                    }
+                } catch (LinkageError | RuntimeException ignored) {
+                    // Running in a unit-test environment without full Forge registries.
+                }
+            } catch (RuntimeException | LinkageError ignored) {
                 continue;
             }
 
-            boolean vanilla = "minecraft".equals(namespace);
-            if (!firstEligibleRecipeSeen) {
-                firstEligibleRecipeSeen = true;
-                naturalDefaultIsVanilla = vanilla;
+            boolean vanilla = "minecraft".equals(id.getNamespace());
+            if (!firstForgeRecipeSeen) {
+                firstForgeRecipeSeen = true;
+                naturalForgeDefaultIsVanilla = vanilla;
                 if (!vanilla) {
                     return null;
                 }
                 continue;
             }
 
-            if (naturalDefaultIsVanilla && !vanilla) {
+            if (naturalForgeDefaultIsVanilla && !vanilla) {
                 return option.getRecipeKey();
             }
         }
         return null;
-    }
-
-    private static String automaticPreferenceNamespace(RecipeOption option) {
-        String explicitNamespace = option.getPolicyNamespace();
-        if (explicitNamespace != null && !explicitNamespace.isEmpty()) {
-            return explicitNamespace;
-        }
-
-        ResourceLocation id;
-        try {
-            id = RecipeKey.parseForgeId(option.getRecipeKey());
-            if (id == null) {
-                return "";
-            }
-            try {
-                if (ForgeRegistries.RECIPES != null && ForgeRegistries.RECIPES.getValue(id) == null) {
-                    return "";
-                }
-            } catch (LinkageError | RuntimeException ignored) {
-                // Running in a unit-test environment without full Forge registries.
-            }
-        } catch (RuntimeException | LinkageError ignored) {
-            return "";
-        }
-        return id.getNamespace();
-    }
-
-    private static String policyNamespace(RecipeOption option) {
-        String explicitNamespace = option.getPolicyNamespace();
-        return explicitNamespace == null || explicitNamespace.isEmpty()
-                ? extractNamespace(option.getRecipeKey())
-                : explicitNamespace;
     }
 
     public static String extractNamespace(String recipeKey) {

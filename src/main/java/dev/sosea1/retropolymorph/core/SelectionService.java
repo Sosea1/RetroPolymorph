@@ -4,12 +4,14 @@ import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.api.RecipeOption;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.api.SelectionPersistencePolicy;
+import dev.sosea1.retropolymorph.api.SelectionPolicyType;
 import dev.sosea1.retropolymorph.api.SelectionReason;
 import dev.sosea1.retropolymorph.preference.ConflictFingerprint;
 import dev.sosea1.retropolymorph.preference.InputFingerprint;
 import dev.sosea1.retropolymorph.preference.InputPreferenceKeys;
 import dev.sosea1.retropolymorph.preference.PlayerRecipePreferences;
 import dev.sosea1.retropolymorph.preference.RecipePreferencePolicy;
+import dev.sosea1.retropolymorph.preference.SmeltingPreferencePolicy;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.item.crafting.IRecipe;
@@ -187,7 +189,10 @@ public final class SelectionService {
             @Nullable World world,
             SelectionContext context,
             List<RecipeOption> options) {
-        RecipePreferencePolicy.PreferenceDecision decision = RecipePreferencePolicy.decide(options);
+        RecipePreferencePolicy.PreferenceDecision decision =
+                context.getPolicyType() == SelectionPolicyType.SMELTING
+                        ? SmeltingPreferencePolicy.decide(options)
+                        : RecipePreferencePolicy.decide(options);
         String policyChoice = decision.getRecipeKey();
         if (policyChoice != null
                 && containsOption(options, policyChoice)

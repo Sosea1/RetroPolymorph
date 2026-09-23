@@ -2,6 +2,7 @@ package dev.sosea1.retropolymorph.furnace;
 
 import dev.sosea1.retropolymorph.api.RecipeOption;
 import dev.sosea1.retropolymorph.api.SelectionContext;
+import dev.sosea1.retropolymorph.api.SelectionPolicyType;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Slot;
@@ -78,6 +79,11 @@ final class FurnaceContext implements SelectionContext {
         }
         state.clear();
         this.furnace.markDirty();
+    }
+
+    @Override
+    public SelectionPolicyType getPolicyType() {
+        return SelectionPolicyType.SMELTING;
     }
 
     @Override

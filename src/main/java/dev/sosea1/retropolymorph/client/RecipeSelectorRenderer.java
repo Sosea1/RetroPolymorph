@@ -275,7 +275,7 @@ final class RecipeSelectorRenderer {
             this.tooltipLines.add("\u00a7a" + I18n.format("retropolymorph.selector.selected") + " \u00a77(" + reasonText + ")");
         }
         if (this.showRecipeSourceInTooltip) {
-            String sourceName = recipeSourceName(choice.getRecipeKey());
+            String sourceName = recipeSourceName(choice);
             if (sourceName != null) {
                 this.tooltipLines.add("\u00a77" + I18n.format(
                         "retropolymorph.selector.source", sourceName));
@@ -318,15 +318,29 @@ final class RecipeSelectorRenderer {
         }
     }
 
-    private static String recipeSourceName(String recipeKey) {
-        if (recipeKey == null) {
+    private static String recipeSourceName(RecipeOption choice) {
+        if (choice == null || choice.getRecipeKey() == null) {
             return null;
         }
-        int separator = recipeKey.indexOf(':');
-        if (separator <= 0) {
-            return null;
+
+        String namespace;
+        if (choice.getRecipeKey().startsWith("smelt:")) {
+            ItemStack output = choice.getOutput();
+            ResourceLocation outputId = output.isEmpty()
+                    ? null
+                    : output.getItem().getRegistryName();
+            if (outputId == null) {
+                return null;
+            }
+            namespace = outputId.getNamespace();
+        } else {
+            int separator = choice.getRecipeKey().indexOf(':');
+            if (separator <= 0) {
+                return null;
+            }
+            namespace = choice.getRecipeKey().substring(0, separator);
         }
-        String namespace = recipeKey.substring(0, separator);
+
         ModContainer mod = Loader.instance().getIndexedModList().get(namespace);
         return mod == null ? namespace : mod.getName();
     }

@@ -2,6 +2,7 @@ package dev.sosea1.retropolymorph.config;
 
 import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.preference.RecipePreferencePolicy;
+import dev.sosea1.retropolymorph.preference.SmeltingPreferencePolicy;
 import net.minecraftforge.common.config.Configuration;
 
 import java.io.File;
@@ -21,9 +22,14 @@ public final class PolymorphConfig {
     private static List<String> preferredRecipes = Collections.emptyList();
     private static boolean preferModdedOverVanilla = true;
 
+    private static List<String> preferredSmeltingMods = Collections.emptyList();
+    private static List<String> preferredSmeltingOutputs = Collections.emptyList();
+    private static boolean preferModdedSmeltingOverVanilla = true;
+
     private static final String CATEGORY_SELECTOR = "selector";
     private static final String CATEGORY_INTEGRATIONS = "integrations";
     private static final String CATEGORY_POLICY = "policy";
+    private static final String CATEGORY_SMELTING_POLICY = "smeltingPolicy";
 
     private static boolean selectorEnabled = true;
     private static SelectorMode selectorMode = SelectorMode.COMPACT;
@@ -59,7 +65,7 @@ public final class PolymorphConfig {
 
         config.setCategoryComment(
                 CATEGORY_POLICY,
-                "Default recipe-selection policy. Explicit player choices always win.\n"
+                "Crafting and recipe-backed machine default-selection policy. Explicit player choices always win.\n"
                         + "Example:\n"
                         + "B:preferModdedOverVanilla=true\n"
                         + "S:preferredMods <\n"
@@ -72,8 +78,24 @@ public final class PolymorphConfig {
                         + "    enderio:example_recipe\n"
                         + ">\n"
                         + "Lists are ordered from highest to lowest priority.\n"
-                        + "For furnace conflicts, preferredMods uses the output item's mod namespace.\n"
-                        + "Exact recipe keys can be copied from selector tooltips when selector.showRecipeKeyInTooltip=true.");
+                        + "Recipe keys can be copied from selector tooltips when selector.showRecipeKeyInTooltip=true.");
+
+        config.setCategoryComment(
+                CATEGORY_SMELTING_POLICY,
+                "Furnace-only default-selection policy. It uses output item IDs, not internal smelt keys.\n"
+                        + "Example:\n"
+                        + "B:preferModdedOverVanilla=true\n"
+                        + "S:preferredMods <\n"
+                        + "    thermalfoundation\n"
+                        + "    mekanism\n"
+                        + "    *\n"
+                        + "    minecraft\n"
+                        + ">\n"
+                        + "S:preferredOutputs <\n"
+                        + "    thermalfoundation:material\n"
+                        + "    mekanism:ingot@0\n"
+                        + ">\n"
+                        + "Output selectors use modid:item; append @meta only when a specific metadata value is required.");
 
         selectorEnabled = config.getBoolean(
                 "enabled",
@@ -159,7 +181,7 @@ public final class PolymorphConfig {
                 CATEGORY_POLICY,
                 true,
                 "When no player choice or explicit policy matches, prefer the first modded recipe when the native default is vanilla.\n"
-                        + "Set false to preserve the native Forge/furnace recipe order.");
+                        + "Set false to preserve the native Forge/machine recipe order.");
 
         String[] rawPreferredMods = config.getStringList(
                 "preferredMods",
@@ -182,6 +204,36 @@ public final class PolymorphConfig {
                 preferredMods,
                 preferredRecipes,
                 preferModdedOverVanilla);
+
+        preferModdedSmeltingOverVanilla = config.getBoolean(
+                "preferModdedOverVanilla",
+                CATEGORY_SMELTING_POLICY,
+                true,
+                "When no player choice or explicit smelting policy matches, prefer the first modded output when the native furnace output is vanilla.\n"
+                        + "Set false to preserve native FurnaceRecipes order.");
+
+        String[] rawPreferredSmeltingMods = config.getStringList(
+                "preferredMods",
+                CATEGORY_SMELTING_POLICY,
+                new String[0],
+                "Ordered output-mod priority list. Earlier mods have higher priority.\n"
+                        + "Use '*' to represent unlisted mods (e.g. 'thermalfoundation', 'mekanism', '*', 'minecraft').\n"
+                        + "If '*' is omitted, unlisted mods are placed at the end of the list.");
+        preferredSmeltingMods = parsePreferredMods(rawPreferredSmeltingMods);
+
+        String[] rawPreferredSmeltingOutputs = config.getStringList(
+                "preferredOutputs",
+                CATEGORY_SMELTING_POLICY,
+                new String[0],
+                "Ordered furnace output priorities. Earlier outputs win over later ones.\n"
+                        + "Use modid:item to match every metadata value, or modid:item@meta for one exact metadata value.");
+        preferredSmeltingOutputs = SmeltingPreferencePolicy.parsePreferredOutputs(
+                rawPreferredSmeltingOutputs);
+
+        SmeltingPreferencePolicy.configure(
+                preferredSmeltingMods,
+                preferredSmeltingOutputs,
+                preferModdedSmeltingOverVanilla);
 
         if (config.hasChanged()) {
             config.save();
@@ -249,6 +301,18 @@ public final class PolymorphConfig {
 
     public static boolean isPreferModdedOverVanilla() {
         return preferModdedOverVanilla;
+    }
+
+    public static List<String> getPreferredSmeltingMods() {
+        return preferredSmeltingMods;
+    }
+
+    public static List<String> getPreferredSmeltingOutputs() {
+        return preferredSmeltingOutputs;
+    }
+
+    public static boolean isPreferModdedSmeltingOverVanilla() {
+        return preferModdedSmeltingOverVanilla;
     }
 
     public static List<String> parsePreferredMods(String[] values) {

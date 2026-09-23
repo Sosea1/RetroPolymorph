@@ -3,11 +3,13 @@ package dev.sosea1.retropolymorph.core;
 import dev.sosea1.retropolymorph.api.RecipeOption;
 import dev.sosea1.retropolymorph.api.SelectionContext;
 import dev.sosea1.retropolymorph.api.SelectionPersistencePolicy;
+import dev.sosea1.retropolymorph.api.SelectionPolicyType;
 import dev.sosea1.retropolymorph.api.SelectionReason;
 import dev.sosea1.retropolymorph.preference.ConflictFingerprint;
 import dev.sosea1.retropolymorph.preference.InputFingerprint;
 import dev.sosea1.retropolymorph.preference.PlayerRecipePreferences;
 import dev.sosea1.retropolymorph.preference.RecipePreferencePolicy;
+import dev.sosea1.retropolymorph.preference.SmeltingPreferencePolicy;
 import net.minecraft.init.Bootstrap;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
@@ -51,6 +53,10 @@ public final class SelectionServiceTest {
     @AfterEach
     public void tearDown() {
         RecipePreferencePolicy.configure(Collections.<String>emptyList(), Collections.<String>emptyList());
+        SmeltingPreferencePolicy.configure(
+                Collections.<String>emptyList(),
+                Collections.<String>emptyList(),
+                true);
         RecipePreferencePolicy.setPriority("mod:policy", 0);
         RecipePreferencePolicy.setPriority("mod:api", 0);
     }
@@ -316,7 +322,38 @@ public final class SelectionServiceTest {
         assertNull(PlayerRecipePreferences.lookup(this.playerData, fingerprint));
     }
 
-    private static final class MockContext implements SelectionContext {
+    @Test
+    public void smeltingContextUsesSmeltingPolicyInsteadOfRecipePolicy() {
+        Item thermalOutput = new Item().setRegistryName(
+                "thermalfoundation", "retropolymorph_selection_service_test");
+
+        RecipePreferencePolicy.setPriority("mod:policy", 50);
+        SmeltingPreferencePolicy.configure(
+                Collections.<String>emptyList(),
+                Collections.singletonList(
+                        "thermalfoundation:retropolymorph_selection_service_test"),
+                false);
+
+        List<RecipeOption> options = Arrays.asList(
+                new RecipeOption("mod:policy", new ItemStack(testItem, 1)),
+                new RecipeOption("smelt:test:thermal", new ItemStack(thermalOutput, 1)));
+
+        MockContext ctx = new MockContext(
+                options, SelectionPersistencePolicy.PLAYER_PERSISTENT) {
+            @Override
+            public SelectionPolicyType getPolicyType() {
+                return SelectionPolicyType.SMELTING;
+            }
+        };
+
+        SelectionServiceResult result = SelectionService.handle(
+                null, this.playerData, ctx, SelectionCommand.query());
+
+        assertEquals("smelt:test:thermal", result.getSelectedRecipeKey());
+        assertEquals(SelectionReason.EXACT_RECIPE_POLICY, result.getReason());
+    }
+
+    private static class MockContext implements SelectionContext {
         private final List<RecipeOption> options;
         private final SelectionPersistencePolicy policy;
         @Nullable private final Container container;

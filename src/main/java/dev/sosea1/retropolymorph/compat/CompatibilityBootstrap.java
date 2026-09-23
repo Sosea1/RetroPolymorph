@@ -29,7 +29,7 @@ public final class CompatibilityBootstrap {
 
     /** Hard guards for containers that provide their own conflicting native selection UI (e.g. IE). */
     public static final int PRIORITY_NATIVE_RESOLVER_GUARD = 1200;
-    public static final int PRIORITY_PACKAGE_GUARD = 1190;
+    public static final int PRIORITY_ENGINEERS_DECOR_GUARD = 1190;
 
     /** Complex custom UI containers (e.g. ModularUI backpack container). */
     public static final int PRIORITY_MODULAR_UI = 1100;
@@ -95,12 +95,12 @@ public final class CompatibilityBootstrap {
         // treated-wood crafting table. Guard that exact container instead of
         // blocking every GUI in the mod package.
         IntegrationHealthRegistry.register(
-                new IntegrationDescriptor("engineersdecor", "Engineer's Decor", PRIORITY_PACKAGE_GUARD),
+                new IntegrationDescriptor("engineersdecor", "Engineer's Decor", PRIORITY_ENGINEERS_DECOR_GUARD),
                 true);
         IntegrationHealthRegistry.associateAdapter(id("engineers_decor_native_selector"), "engineersdecor");
         RetroPolymorphAPI.registerAdapter(
                 id("engineers_decor_native_selector"),
-                PRIORITY_PACKAGE_GUARD,
+                PRIORITY_ENGINEERS_DECOR_GUARD,
                 new CustomRecipeEngineGuardAdapter(
                         "wile.engineersdecor.blocks.BlockDecorCraftingTable$BContainer"));
 

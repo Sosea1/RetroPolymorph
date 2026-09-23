@@ -60,6 +60,15 @@ public interface SelectionContext {
     default void applyRemoteSelection(@Nullable String recipeKey) {
     }
 
+    /**
+     * Chooses the default-selection policy for this context. Recipe-backed
+     * crafting and machine integrations use RECIPE by default; legacy furnace
+     * contexts opt into the separate SMELTING policy.
+     */
+    default SelectionPolicyType getPolicyType() {
+        return SelectionPolicyType.RECIPE;
+    }
+
     default SelectionPersistencePolicy getPersistencePolicy() {
         return SelectionPersistencePolicy.PLAYER_PERSISTENT;
     }

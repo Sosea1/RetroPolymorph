@@ -25,7 +25,7 @@ When the current crafting grid matches more than one recipe, a small selector
 appears beside the output slot. It only appears for an actual conflict, so
 ordinary recipes keep the normal Minecraft experience.
 
-![A recipe conflict adds a selector beside the crafting output.](docs/media/crafting-conflict-detection.gif)
+![A remembered crafting choice is restored for the same ingredients.](docs/media/crafting-remembered-choice.gif)
 
 Open the selector to see every available output, then click the result you
 want. The crafting output changes immediately.
@@ -35,7 +35,7 @@ want. The crafting output changes immediately.
 Your chosen result is remembered. Remove and place the same ingredients again,
 and Retro Polymorph restores the previous result automatically.
 
-![A remembered crafting choice is restored for the same ingredients.](docs/media/crafting-remembered-choice.gif)
+![A recipe conflict adds a selector beside the crafting output.](docs/media/crafting-conflict-detection.gif)
 
 ### Smelting conflicts
 
@@ -94,8 +94,8 @@ the integration supports player preferences.
 
 Configuration is stored in `config/retropolymorph.cfg`.
 
-The important policy options are ordered lists: entries near the top have higher
-priority.
+Crafting and smelting have separate default policies. Entries near the top of
+an ordered list have higher priority.
 
 ```ini
 policy {
@@ -113,16 +113,40 @@ policy {
         ic2:another_recipe
     >
 }
+
+smeltingPolicy {
+    B:preferModdedOverVanilla=true
+
+    S:preferredMods <
+        thermalfoundation
+        mekanism
+        *
+        minecraft
+    >
+
+    S:preferredOutputs <
+        thermalfoundation:material
+        mekanism:ingot@0
+    >
+}
 ```
+
+`policy` applies to crafting and recipe-backed machine integrations.
+`preferredRecipes` contains exact selector recipe keys.
+
+`smeltingPolicy` applies only to furnace conflicts. `preferredOutputs` uses
+ordinary output item IDs (`modid:item`), with optional `@meta` when a specific
+metadata value is required. Internal `smelt:...` selection keys are not part of
+the user-facing configuration.
 
 `*` represents every mod not explicitly listed. If omitted, unlisted mods are
 placed after the listed entries. Explicit player choices take precedence over
-modpack policy.
+both policies.
 
-`preferModdedOverVanilla` is enabled by default. It only applies when no active
-player choice, exact recipe preference, or mod priority already decides the
-conflict. Set it to `false` to preserve the native Forge/furnace default order.
-For furnace conflicts, `preferredMods` uses the output item's mod namespace.
+Both `preferModdedOverVanilla` switches are enabled by default. For crafting it
+means a modded recipe can replace a vanilla native default; for smelting it
+means a modded output can replace a vanilla output. Set either switch to
+`false` to preserve that engine's native order.
 
 Integrations can be disabled individually under the `integrations` config
 category. Safety guards remain active for custom recipe engines where generic
