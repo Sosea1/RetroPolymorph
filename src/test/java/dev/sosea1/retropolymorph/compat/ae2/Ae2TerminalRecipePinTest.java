@@ -88,6 +88,13 @@ public final class Ae2TerminalRecipePinTest {
         // Put test item in slot 0
         container.getMatrixSlot(0).putStack(new ItemStack(testItem, 1, 0));
 
+        // Player+world required: the fixed code validates via RecipeProbe.matches(world)
+        // which returns false when world==null. Real AE2 always has a player/world.
+        DummyWorld world = createDummyWorld();
+        NBTTagCompound playerData = new NBTTagCompound();
+        EntityPlayerMP player = createMockPlayer(world, playerData);
+        container.setPlayer(player);
+
         Ae2SelectionStore.set(container, ID_RECIPE_A);
         container.retropolymorph$setAe2SelectedRecipeId(ID_RECIPE_A);
 
@@ -362,7 +369,9 @@ public final class Ae2TerminalRecipePinTest {
 
         private final MockMatrixSlot[] matrixSlots = new MockMatrixSlot[9];
         private final MockResultSlot resultSlot;
-        private Slot playerSlot;
+
+        @Nullable
+        private EntityPlayer player;
 
         @Nullable
         private IRecipe currentRecipe;
@@ -382,12 +391,20 @@ public final class Ae2TerminalRecipePinTest {
             // 1 result slot
             this.resultSlot = new MockResultSlot(this.resultInv, 0, 100, 18);
             this.addSlotToContainer(this.resultSlot);
+            // NOTE: deliberately no Slot(InventoryPlayer) here — real AE2's AppEngSlot
+            // always passes emptyInventory to the Slot superclass, so
+            // slot.inventory instanceof InventoryPlayer is always false.
+            // The player is exposed only through the bridge method below.
         }
 
+        /**
+         * Sets the player for this mock container.
+         * Unlike the old implementation, this does NOT add a Slot(InventoryPlayer)
+         * to inventorySlots — that would make the generic slot-scan succeed,
+         * masking the real AE2 bug.
+         */
         void setPlayer(EntityPlayer player) {
-            InventoryPlayer invPlayer = createMockInventoryPlayer(player);
-            this.playerSlot = new Slot(invPlayer, 0, 0, 100);
-            this.addSlotToContainer(this.playerSlot);
+            this.player = player;
         }
 
         MockMatrixSlot getMatrixSlot(int index) {
@@ -431,6 +448,16 @@ public final class Ae2TerminalRecipePinTest {
         public void retropolymorph$setAe2SelectedRecipeId(@Nullable ResourceLocation recipeId) {
             this.selectedRecipeId = recipeId;
             Ae2SelectionStore.set(this, recipeId);
+        }
+
+        /**
+         * Bridge method: returns the player directly from the stored field,
+         * matching the real mixin that calls AEBaseContainer#getPlayerInv().
+         */
+        @Nullable
+        @Override
+        public EntityPlayer retropolymorph$getAe2Player() {
+            return this.player;
         }
     }
 }

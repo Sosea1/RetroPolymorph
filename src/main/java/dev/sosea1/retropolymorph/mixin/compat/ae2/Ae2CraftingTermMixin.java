@@ -5,6 +5,8 @@ import dev.sosea1.retropolymorph.compat.ae2.Ae2MatrixChangeScope;
 import dev.sosea1.retropolymorph.compat.ae2.Ae2SelectionStore;
 import dev.sosea1.retropolymorph.compat.ae2.Ae2TerminalRecipePin;
 import dev.sosea1.retropolymorph.config.PolymorphConfig;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.crafting.IRecipe;
@@ -35,6 +37,14 @@ public abstract class Ae2CraftingTermMixin implements Ae2CraftingTermExtension {
     @Nullable
     private ResourceLocation retropolymorph$selectedRecipeId;
 
+    /**
+     * Shadowed from AEBaseContainer — the only reliable way to get the viewing player
+     * from an AE2 container. AppEngSlot always passes emptyInventory to the Slot
+     * superclass, making slot.inventory instanceof InventoryPlayer always false.
+     */
+    @Shadow(remap = false)
+    public abstract InventoryPlayer getPlayerInv();
+
     @Override
     @Nullable
     public IRecipe retropolymorph$getAe2CurrentRecipe() {
@@ -57,6 +67,17 @@ public abstract class Ae2CraftingTermMixin implements Ae2CraftingTermExtension {
     public void retropolymorph$setAe2SelectedRecipeId(@Nullable ResourceLocation recipeId) {
         this.retropolymorph$selectedRecipeId = recipeId;
         Ae2SelectionStore.set((Container) (Object) this, recipeId);
+    }
+
+    @Override
+    @Nullable
+    public EntityPlayer retropolymorph$getAe2Player() {
+        try {
+            InventoryPlayer inv = getPlayerInv();
+            return inv == null ? null : inv.player;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Inject(method = "func_75130_a", at = @At("HEAD"), remap = false, require = 0)

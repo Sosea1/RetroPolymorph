@@ -67,9 +67,14 @@ public final class SelectionService {
         SelectionPersistencePolicy persistence = context.getPersistencePolicy();
         boolean accepted = true;
         SelectionReason reason = SelectionReason.NATIVE_DEFAULT;
+        // Retain the current selection when options are temporarily empty (e.g. Cyclic
+        // auto-crafter template swap) — RecipeSelectionState.resolveSelected() will still
+        // validate via RecipeProbe.matches() before actually applying the recipe.
+        boolean retainSelection = options.isEmpty() && context.retainSelectionWhenOptionsEmpty();
         boolean staleSelectionCleared = command.isQuery()
                 && selectedBefore != null
-                && !containsOption(options, selectedBefore);
+                && !containsOption(options, selectedBefore)
+                && !retainSelection;
 
         if (staleSelectionCleared) {
             // Preseeding runs before CraftingManager would normally notice that
@@ -120,6 +125,7 @@ public final class SelectionService {
 
         String selectedAfter = SelectionContextGuard.selected(context);
         if (selectedAfter != null
+                && !retainSelection
                 && (!RecipeKey.isWireSafe(selectedAfter) || !containsOption(options, selectedAfter))) {
             // Drop authoritative selection that no longer belongs to the live options.
             SelectionContextGuard.clear(context);

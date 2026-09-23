@@ -68,13 +68,26 @@ public final class Ae2TerminalRecipePin {
     }
 
     /**
-     * Resolves the opening player from standard player inventory slots.
+     * Resolves the opening player from the container.
+     *
+     * <p>For real AE2 containers the bridge method is tried first because
+     * {@code AppEngSlot} always passes {@code emptyInventory} to the Slot superclass,
+     * so {@code slot.inventory instanceof InventoryPlayer} is always false there.
+     * The generic slot-scan remains as a fallback for vanilla/other containers.</p>
      */
     @Nullable
     public static EntityPlayer resolvePlayer(Container container) {
         if (container == null) {
             return null;
         }
+        // AE2 bridge — only reliable path for real AE2 containers
+        if (container instanceof Ae2CraftingTermExtension) {
+            EntityPlayer bridgePlayer = ((Ae2CraftingTermExtension) container).retropolymorph$getAe2Player();
+            if (bridgePlayer != null) {
+                return bridgePlayer;
+            }
+        }
+        // Generic fallback for vanilla and other containers
         for (Slot slot : container.inventorySlots) {
             if (slot != null && slot.inventory instanceof net.minecraft.entity.player.InventoryPlayer) {
                 return ((net.minecraft.entity.player.InventoryPlayer) slot.inventory).player;
@@ -171,7 +184,7 @@ public final class Ae2TerminalRecipePin {
         ResourceLocation selectedId = selectedId(container);
         IRecipe selectedRecipe = selectedId == null ? null : ForgeRegistries.RECIPES.getValue(selectedId);
 
-        if (selectedRecipe != null && (world == null || RecipeProbe.matches(selectedRecipe, matrix, world))) {
+        if (selectedRecipe != null && world != null && RecipeProbe.matches(selectedRecipe, matrix, world)) {
             if (container instanceof Ae2CraftingTermExtension) {
                 ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(selectedRecipe);
             }
@@ -192,7 +205,7 @@ public final class Ae2TerminalRecipePin {
             ResourceLocation preseededId = selectedId(container);
             if (preseededId != null) {
                 IRecipe preseededRecipe = ForgeRegistries.RECIPES.getValue(preseededId);
-                if (preseededRecipe != null && (world == null || RecipeProbe.matches(preseededRecipe, matrix, world))) {
+                if (preseededRecipe != null && world != null && RecipeProbe.matches(preseededRecipe, matrix, world)) {
                     if (container instanceof Ae2CraftingTermExtension) {
                         ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(preseededRecipe);
                     }
@@ -237,7 +250,17 @@ public final class Ae2TerminalRecipePin {
         if (selectedId == null) {
             if (container instanceof Ae2CraftingTermExtension) {
                 IRecipe current = ((Ae2CraftingTermExtension) container).retropolymorph$getAe2CurrentRecipe();
-                if (current == null && !result.getStack().isEmpty()) {
+                // If currentRecipe is still set without a selection, validate it and clear the
+                // ghost slot if it no longer matches (e.g. ingredient was removed).
+                if (current != null) {
+                    World world = resolveWorld(container);
+                    if (world == null || !RecipeProbe.matches(current, matrix, world)) {
+                        ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);
+                        if (!result.getStack().isEmpty()) {
+                            result.putStack(ItemStack.EMPTY);
+                        }
+                    }
+                } else if (!result.getStack().isEmpty()) {
                     result.putStack(ItemStack.EMPTY);
                 }
             }
@@ -247,7 +270,7 @@ public final class Ae2TerminalRecipePin {
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(selectedId);
         World world = resolveWorld(container);
 
-        if (recipe == null || (world != null && !RecipeProbe.matches(recipe, matrix, world))) {
+        if (recipe == null || !RecipeProbe.matches(recipe, matrix, world)) {
             clearSelection(container);
             if (container instanceof Ae2CraftingTermExtension) {
                 ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);

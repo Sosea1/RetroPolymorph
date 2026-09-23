@@ -135,6 +135,14 @@ final class CyclicCrafterSurface implements MachineRecipeSurface {
     }
 
     @Override
+    public boolean retainSelectionWhenOptionsEmpty() {
+        // Keep the saved recipe selection while the template inventory is temporarily
+        // empty (e.g. during a template swap). RecipeSelectionState.resolveSelected()
+        // will still validate via RecipeProbe.matches() before applying the recipe.
+        return true;
+    }
+
+    @Override
     @Nullable
     public Slot getResultSlot() {
         return null;
