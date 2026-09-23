@@ -57,8 +57,12 @@ public final class Ae2TerminalRecipePinTest {
         // Unlock registry for test dummy registrations
         ForgeRegistry<IRecipe> registry = (ForgeRegistry<IRecipe>) ForgeRegistries.RECIPES;
         registry.unfreeze();
-        registry.register(recipeA);
-        registry.register(recipeB);
+        try {
+            registry.register(recipeA);
+            registry.register(recipeB);
+        } finally {
+            registry.freeze();
+        }
 
         dev.sosea1.retropolymorph.core.CraftingPreferenceSeeder.reset();
         Ae2Integration.INSTANCE.registerEnabled();
@@ -104,6 +108,11 @@ public final class Ae2TerminalRecipePinTest {
         container.getMatrixSlot(0).putStack(new ItemStack(testItem, 1, 0));
         // Result slot initially has ghost output
         container.getResultSlot().putStack(new ItemStack(testItem, 4, 999));
+
+        DummyWorld world = createDummyWorld();
+        NBTTagCompound playerData = new NBTTagCompound();
+        EntityPlayerMP player = createMockPlayer(world, playerData);
+        container.setPlayer(player);
 
         // Recipe no longer matches the matrix
         recipeA.setShouldMatch(false);
@@ -189,6 +198,37 @@ public final class Ae2TerminalRecipePinTest {
 
         // Outside scope again: returns null
         assertNull(Ae2ExternalCraftingSelectionProvider.INSTANCE.getSelectedRecipeId(scratch, null));
+    }
+
+    @Test
+    public void testClearSelectionRestoresNativeResultWhenMatrixNotEmpty() {
+        MockAe2Container container = new MockAe2Container();
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem, 1, 0));
+
+        DummyWorld world = createDummyWorld();
+        NBTTagCompound playerData = new NBTTagCompound();
+        EntityPlayerMP player = createMockPlayer(world, playerData);
+        container.setPlayer(player);
+
+        Ae2CraftingTermAdapter adapter = Ae2CraftingTermAdapter.INSTANCE;
+        dev.sosea1.retropolymorph.api.RecipeSelectionContext context =
+                (dev.sosea1.retropolymorph.api.RecipeSelectionContext) adapter.probe(container).getContext();
+        assertNotNull(context);
+
+        // Select Recipe B explicitly first
+        context.select(ID_RECIPE_B.toString(), world);
+        assertEquals(ID_RECIPE_B, container.retropolymorph$getAe2SelectedRecipeId());
+        assertEquals(2, container.getResultSlot().getStack().getCount());
+
+        // Clear explicit selection (e.g. right-click to return to auto/native)
+        context.clearSelection();
+
+        // Selection should be cleared, but native recipe (Recipe A) output should be restored!
+        assertNull(container.retropolymorph$getAe2SelectedRecipeId());
+        assertFalse(container.getResultSlot().getStack().isEmpty(),
+                "Result slot must not be EMPTY when ingredients match a native recipe!");
+        assertEquals(1, container.getResultSlot().getStack().getCount(),
+                "Native recipe output count must be restored!");
     }
 
     // --- Mock Classes & Helpers ---

@@ -171,7 +171,7 @@ public final class Ae2TerminalRecipePin {
         ResourceLocation selectedId = selectedId(container);
         IRecipe selectedRecipe = selectedId == null ? null : ForgeRegistries.RECIPES.getValue(selectedId);
 
-        if (selectedRecipe != null && RecipeProbe.matches(selectedRecipe, matrix, world)) {
+        if (selectedRecipe != null && (world == null || RecipeProbe.matches(selectedRecipe, matrix, world))) {
             if (container instanceof Ae2CraftingTermExtension) {
                 ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(selectedRecipe);
             }
@@ -192,7 +192,7 @@ public final class Ae2TerminalRecipePin {
             ResourceLocation preseededId = selectedId(container);
             if (preseededId != null) {
                 IRecipe preseededRecipe = ForgeRegistries.RECIPES.getValue(preseededId);
-                if (preseededRecipe != null && RecipeProbe.matches(preseededRecipe, matrix, world)) {
+                if (preseededRecipe != null && (world == null || RecipeProbe.matches(preseededRecipe, matrix, world))) {
                     if (container instanceof Ae2CraftingTermExtension) {
                         ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(preseededRecipe);
                     }
@@ -247,7 +247,7 @@ public final class Ae2TerminalRecipePin {
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(selectedId);
         World world = resolveWorld(container);
 
-        if (recipe == null || !RecipeProbe.matches(recipe, matrix, world)) {
+        if (recipe == null || (world != null && !RecipeProbe.matches(recipe, matrix, world))) {
             clearSelection(container);
             if (container instanceof Ae2CraftingTermExtension) {
                 ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);

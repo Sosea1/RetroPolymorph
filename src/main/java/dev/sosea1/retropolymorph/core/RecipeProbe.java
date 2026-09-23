@@ -49,8 +49,8 @@ public final class RecipeProbe {
         return matrix;
     }
 
-    public static boolean matches(IRecipe recipe, InventoryCrafting matrix, @Nullable World world) {
-        if (recipe == null || matrix == null) {
+    public static boolean matches(IRecipe recipe, InventoryCrafting matrix, World world) {
+        if (recipe == null || matrix == null || world == null) {
             return false;
         }
         try {

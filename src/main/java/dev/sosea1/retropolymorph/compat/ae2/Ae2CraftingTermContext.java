@@ -11,6 +11,7 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
@@ -126,9 +127,17 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
         World world = this.container != null ? Ae2TerminalRecipePin.resolveWorld(this.container) : null;
         if (isGridEmpty()) {
             this.resultSlot.putStack(ItemStack.EMPTY);
-        } else if (world != null && this.container instanceof Ae2CraftingTermExtension) {
-            IRecipe current = ((Ae2CraftingTermExtension) this.container).retropolymorph$getAe2CurrentRecipe();
-            if (current == null || !RecipeProbe.matches(current, this.matrix, world)) {
+        } else if (world != null) {
+            IRecipe nativeRecipe = CraftingManager.findMatchingRecipe(this.matrix, world);
+            if (nativeRecipe != null) {
+                if (this.extension != null) {
+                    this.extension.retropolymorph$setAe2CurrentRecipe(nativeRecipe);
+                }
+                this.resultSlot.putStack(RecipeProbe.craftingResult(nativeRecipe, this.matrix));
+            } else {
+                if (this.extension != null) {
+                    this.extension.retropolymorph$setAe2CurrentRecipe(null);
+                }
                 this.resultSlot.putStack(ItemStack.EMPTY);
             }
         }
