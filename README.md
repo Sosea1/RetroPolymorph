@@ -3,7 +3,7 @@
 Retro Polymorph is an unofficial Minecraft 1.12.2 port of
 [Polymorph](https://github.com/illusivesoulworks/polymorph) by Illusive Soulworks.
 It resolves recipe conflicts when multiple recipes accept the same inputs,
-letting every valid result coexist instead of forcing a modpack to remove or
+letting conflicting results coexist instead of forcing a modpack to remove or
 rewrite recipes.
 
 In a large modpack, conflicting recipes are common: the same ingredients may
@@ -27,8 +27,8 @@ ordinary recipes keep the normal Minecraft experience.
 
 ![A remembered crafting choice is restored for the same ingredients.](docs/media/crafting-remembered-choice.gif)
 
-Open the selector to see every available output, then click the result you
-want. The crafting output changes immediately.
+Open the selector to see the available outputs (up to 15 choices), then click
+the result you want. The crafting output changes immediately.
 
 ![Selecting a different crafting result from the selector.](docs/media/crafting-choose-result.gif)
 
@@ -47,10 +47,10 @@ result.
 
 ### More features
 
-- Server-authoritative recipe selection.
+- Server-authoritative recipe selection (up to 15 options).
 - Compact and classic selector layouts with mouse, wheel and keyboard control.
 - JEI / HEI recipe-transfer integration.
-- Optional FastSuite acceleration with a safe Forge-registry fallback.
+- Optional FastSuite acceleration with Forge-registry fallback.
 - Ordered modpack policy for preferred mods and exact recipes.
 - Focused integrations for supported modded crafting interfaces.
 
@@ -80,7 +80,7 @@ of receiving a duplicate selector.
 ## Usage
 
 When more than one recipe matches the current inputs, a selector button appears
-near the result slot.
+near the result slot. Up to 15 conflicting recipes are sent and displayed.
 
 - Left click: open/close the recipe selector.
 - Right click: clear the remembered choice and return to automatic selection.
@@ -93,6 +93,15 @@ the integration supports player preferences.
 ## Configuration
 
 Configuration is stored in `config/retropolymorph.cfg`.
+
+### Selector presentation
+
+The `selector` category controls the in-game recipe selector GUI:
+- `S:mode=compact`: selector layout mode (`compact` displays 5 recipe choices per page with navigation arrows and mouse wheel cycling; `classic` displays the full row of up to 15 choices).
+- `I:buttonOffsetX=0`, `I:buttonOffsetY=0`: pixel offsets to fine-tune button placement.
+- `B:wheelCyclesButton=true`: scroll recipes with the mouse wheel directly over the button.
+- `B:rightClickClears=true`: right-click button to reset player choice to default.
+- `B:closeAfterSelection=true`: automatically close panel after picking a recipe.
 
 Crafting and smelting have separate default policies. Entries near the top of
 an ordered list have higher priority.
