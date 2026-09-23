@@ -29,7 +29,10 @@ public final class RecipePreferencePolicyTest {
 
     @AfterEach
     public void tearDown() {
-        RecipePreferencePolicy.configure(Collections.<String>emptyList(), Collections.<String>emptyList());
+        RecipePreferencePolicy.configure(
+                Collections.<String>emptyList(),
+                Collections.<String>emptyList(),
+                true);
         RecipePreferencePolicy.setPriority("mod:api_override", 0);
     }
 
@@ -120,6 +123,55 @@ public final class RecipePreferencePolicyTest {
     }
 
     @Test
+    public void testSyntheticNamespaceParticipatesInPreferredMods() {
+        RecipePreferencePolicy.configure(
+                Arrays.asList("mekanism", "*", "minecraft"),
+                Collections.<String>emptyList(),
+                true);
+
+        RecipeOption vanilla = new RecipeOption(
+                "smelt:minecraft:ore@0>minecraft:ingot@0x1#0",
+                new ItemStack(Items.IRON_INGOT),
+                "minecraft");
+        RecipeOption mekanism = new RecipeOption(
+                "smelt:minecraft:ore@0>mekanism:ingot@0x1#0",
+                new ItemStack(Items.GOLD_INGOT),
+                "mekanism");
+
+        PreferenceDecision decision = RecipePreferencePolicy.decide(Arrays.asList(vanilla, mekanism));
+        assertEquals(mekanism.getRecipeKey(), decision.getRecipeKey());
+        assertEquals(SelectionReason.MOD_PRIORITY, decision.getReason());
+    }
+
+    @Test
+    public void testAutomaticModdedPreferenceCanBeDisabled() {
+        RecipeOption vanilla = new RecipeOption(
+                "smelt:minecraft:ore@0>minecraft:ingot@0x1#0",
+                new ItemStack(Items.IRON_INGOT),
+                "minecraft");
+        RecipeOption modded = new RecipeOption(
+                "smelt:minecraft:ore@0>modded:ingot@0x1#0",
+                new ItemStack(Items.GOLD_INGOT),
+                "modded");
+
+        RecipePreferencePolicy.configure(
+                Collections.<String>emptyList(),
+                Collections.<String>emptyList(),
+                true);
+        PreferenceDecision enabled = RecipePreferencePolicy.decide(Arrays.asList(vanilla, modded));
+        assertEquals(modded.getRecipeKey(), enabled.getRecipeKey());
+        assertEquals(SelectionReason.AUTOMATIC_MODDED, enabled.getReason());
+
+        RecipePreferencePolicy.configure(
+                Collections.<String>emptyList(),
+                Collections.<String>emptyList(),
+                false);
+        PreferenceDecision disabled = RecipePreferencePolicy.decide(Arrays.asList(vanilla, modded));
+        assertNull(disabled.getRecipeKey());
+        assertEquals(SelectionReason.NATIVE_DEFAULT, disabled.getReason());
+    }
+
+    @Test
     public void testExactRecipeBeatsModPriority() {
         RecipePreferencePolicy.configure(
                 Arrays.asList("thermalfoundation", "*"),
@@ -149,16 +201,15 @@ public final class RecipePreferencePolicyTest {
     }
 
     @Test
-    public void testConfigParserIgnoresLegacyNumericSyntax() {
+    public void testConfigParserKeepsOpaqueWireSafeRecipeKeys() {
         String[] configEntries = new String[] {
                 "mod:plain_one",
-                "mod:legacy_low=20",
-                "mod:legacy_high=100",
+                "machine:key=variant",
                 "mod:plain_two"
         };
         List<String> parsed = PolymorphConfig.parsePreferredRecipes(configEntries);
         assertNotNull(parsed);
-        assertEquals(Arrays.asList("mod:plain_one", "mod:plain_two"), parsed);
+        assertEquals(Arrays.asList("mod:plain_one", "machine:key=variant", "mod:plain_two"), parsed);
     }
 
     @Test
@@ -180,6 +231,7 @@ public final class RecipePreferencePolicyTest {
         assertEquals(Arrays.asList("thermalfoundation", "*", "minecraft"), snapshot.getPreferredMods());
         assertEquals(Arrays.asList("enderio:alloy_iron", "thermal:ingot"), snapshot.getConfiguredExactRecipes());
         assertEquals(Integer.valueOf(500), snapshot.getAddonRecipeOverrides().get("mod:api_override"));
+        assertTrue(snapshot.isPreferModdedOverVanilla());
 
         // Verify immutability
         org.junit.jupiter.api.Assertions.assertThrows(

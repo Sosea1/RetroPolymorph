@@ -198,11 +198,6 @@ public final class SelectionService {
         return SelectionReason.NATIVE_DEFAULT;
     }
 
-    @Nullable
-    public static String chooseFirstModdedForgeRecipe(List<RecipeOption> options) {
-        return RecipePreferencePolicy.chooseFirstModdedForgeRecipe(options);
-    }
-
     public static boolean containsOption(List<RecipeOption> options, String recipeKey) {
         if (!RecipeKey.isWireSafe(recipeKey)) {
             return false;

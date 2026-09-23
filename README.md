@@ -73,8 +73,9 @@ result.
 - Retro Sophisticated Backpacks Crafting Upgrade
 - JEI / HEI transfer and exclusion-area integration
 
-Forestry Worktable and Immersive Engineering Engineer's Workbench keep their
-native recipe-selection UI instead of receiving a duplicate selector.
+Forestry Worktable, Immersive Engineering Engineer's Workbench, and Engineer's
+Decor treated-wood Crafting Table keep their native recipe-selection UI instead
+of receiving a duplicate selector.
 
 ## Usage
 
@@ -98,6 +99,8 @@ priority.
 
 ```ini
 policy {
+    B:preferModdedOverVanilla=true
+
     S:preferredMods <
         thermalfoundation
         mekanism
@@ -115,6 +118,11 @@ policy {
 `*` represents every mod not explicitly listed. If omitted, unlisted mods are
 placed after the listed entries. Explicit player choices take precedence over
 modpack policy.
+
+`preferModdedOverVanilla` is enabled by default. It only applies when no active
+player choice, exact recipe preference, or mod priority already decides the
+conflict. Set it to `false` to preserve the native Forge/furnace default order.
+For furnace conflicts, `preferredMods` uses the output item's mod namespace.
 
 Integrations can be disabled individually under the `integrations` config
 category. Safety guards remain active for custom recipe engines where generic

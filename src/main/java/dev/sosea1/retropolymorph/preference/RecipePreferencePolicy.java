@@ -79,11 +79,17 @@ public final class RecipePreferencePolicy {
         private final List<String> preferredMods;
         private final List<String> configuredExactRecipes;
         private final Map<String, Integer> addonRecipeOverrides;
+        private final boolean preferModdedOverVanilla;
 
-        public PolicySnapshot(List<String> preferredMods, List<String> configuredExactRecipes, Map<String, Integer> addonRecipeOverrides) {
+        public PolicySnapshot(
+                List<String> preferredMods,
+                List<String> configuredExactRecipes,
+                Map<String, Integer> addonRecipeOverrides,
+                boolean preferModdedOverVanilla) {
             this.preferredMods = preferredMods == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(preferredMods));
             this.configuredExactRecipes = configuredExactRecipes == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(configuredExactRecipes));
             this.addonRecipeOverrides = addonRecipeOverrides == null ? Collections.emptyMap() : Collections.unmodifiableMap(new LinkedHashMap<>(addonRecipeOverrides));
+            this.preferModdedOverVanilla = preferModdedOverVanilla;
         }
 
         public List<String> getPreferredMods() {
@@ -98,32 +104,51 @@ public final class RecipePreferencePolicy {
             return this.addonRecipeOverrides;
         }
 
+        public boolean isPreferModdedOverVanilla() {
+            return this.preferModdedOverVanilla;
+        }
+
         @Override
         public String toString() {
             return "PolicySnapshot{preferredMods=" + this.preferredMods
                     + ", configuredExactRecipes=" + this.configuredExactRecipes
-                    + ", addonRecipeOverrides=" + this.addonRecipeOverrides + "}";
+                    + ", addonRecipeOverrides=" + this.addonRecipeOverrides
+                    + ", preferModdedOverVanilla=" + this.preferModdedOverVanilla + "}";
         }
     }
 
     private static volatile List<String> preferredMods = Collections.emptyList();
     private static volatile List<String> configuredExactRecipes = Collections.emptyList();
     private static volatile Map<String, Integer> registeredPriorities = Collections.emptyMap();
+    private static volatile boolean preferModdedOverVanilla = true;
 
     private RecipePreferencePolicy() {
     }
 
     public static PolicySnapshot getPolicySnapshot() {
-        return new PolicySnapshot(preferredMods, configuredExactRecipes, registeredPriorities);
+        return new PolicySnapshot(
+                preferredMods,
+                configuredExactRecipes,
+                registeredPriorities,
+                preferModdedOverVanilla);
+    }
+
+    public static synchronized void configure(List<String> mods, List<String> exactRecipes) {
+        configure(mods, exactRecipes, preferModdedOverVanilla);
     }
 
     /**
-     * Configures the ordered preferred mods and exact recipes from config.
+     * Configures the ordered preferred mods, exact recipes and automatic fallback from config.
      *
      * @param mods ordered mod namespaces (with '*' representing unlisted mods)
      * @param exactRecipes ordered list of recipe keys (earlier entries win)
+     * @param preferModded whether a modded option should replace a vanilla native default
      */
-    public static synchronized void configure(List<String> mods, List<String> exactRecipes) {
+    public static synchronized void configure(
+            List<String> mods,
+            List<String> exactRecipes,
+            boolean preferModded) {
+        preferModdedOverVanilla = preferModded;
         if (mods == null || mods.isEmpty()) {
             preferredMods = Collections.emptyList();
         } else {
@@ -254,10 +279,12 @@ public final class RecipePreferencePolicy {
             }
         }
 
-        // 4. Automatic "prefer modded over vanilla natural default" rule
-        String modernDefault = chooseFirstModdedForgeRecipe(options);
-        if (modernDefault != null) {
-            return PreferenceDecision.automaticModded(modernDefault);
+        // 4. Optional "prefer modded over vanilla natural default" rule
+        if (preferModdedOverVanilla) {
+            String modernDefault = chooseFirstModdedRecipe(options);
+            if (modernDefault != null) {
+                return PreferenceDecision.automaticModded(modernDefault);
+            }
         }
 
         // 5. Native Forge / machine default
@@ -281,7 +308,7 @@ public final class RecipePreferencePolicy {
                 buckets[i] = Integer.MAX_VALUE;
                 continue;
             }
-            String namespace = extractNamespace(option.getRecipeKey());
+            String namespace = policyNamespace(option);
             if (namespace.isEmpty()) {
                 buckets[i] = Integer.MAX_VALUE;
                 continue;
@@ -325,47 +352,67 @@ public final class RecipePreferencePolicy {
     }
 
     @Nullable
-    public static String chooseFirstModdedForgeRecipe(List<RecipeOption> options) {
-        boolean firstForgeRecipeSeen = false;
-        boolean naturalForgeDefaultIsVanilla = false;
+    private static String chooseFirstModdedRecipe(List<RecipeOption> options) {
+        boolean firstEligibleRecipeSeen = false;
+        boolean naturalDefaultIsVanilla = false;
 
         for (RecipeOption option : options) {
             if (option == null) {
                 continue;
             }
 
-            ResourceLocation id;
-            try {
-                id = RecipeKey.parseForgeId(option.getRecipeKey());
-                if (id == null) {
-                    continue;
-                }
-                try {
-                    if (ForgeRegistries.RECIPES != null && ForgeRegistries.RECIPES.getValue(id) == null) {
-                        continue;
-                    }
-                } catch (LinkageError | RuntimeException ignored) {
-                    // Running in unit test environment without full Forge registries
-                }
-            } catch (RuntimeException | LinkageError ignored) {
+            String namespace = automaticPreferenceNamespace(option);
+            if (namespace.isEmpty()) {
                 continue;
             }
 
-            boolean vanilla = "minecraft".equals(id.getNamespace());
-            if (!firstForgeRecipeSeen) {
-                firstForgeRecipeSeen = true;
-                naturalForgeDefaultIsVanilla = vanilla;
+            boolean vanilla = "minecraft".equals(namespace);
+            if (!firstEligibleRecipeSeen) {
+                firstEligibleRecipeSeen = true;
+                naturalDefaultIsVanilla = vanilla;
                 if (!vanilla) {
                     return null;
                 }
                 continue;
             }
 
-            if (naturalForgeDefaultIsVanilla && !vanilla) {
+            if (naturalDefaultIsVanilla && !vanilla) {
                 return option.getRecipeKey();
             }
         }
         return null;
+    }
+
+    private static String automaticPreferenceNamespace(RecipeOption option) {
+        String explicitNamespace = option.getPolicyNamespace();
+        if (explicitNamespace != null && !explicitNamespace.isEmpty()) {
+            return explicitNamespace;
+        }
+
+        ResourceLocation id;
+        try {
+            id = RecipeKey.parseForgeId(option.getRecipeKey());
+            if (id == null) {
+                return "";
+            }
+            try {
+                if (ForgeRegistries.RECIPES != null && ForgeRegistries.RECIPES.getValue(id) == null) {
+                    return "";
+                }
+            } catch (LinkageError | RuntimeException ignored) {
+                // Running in a unit-test environment without full Forge registries.
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            return "";
+        }
+        return id.getNamespace();
+    }
+
+    private static String policyNamespace(RecipeOption option) {
+        String explicitNamespace = option.getPolicyNamespace();
+        return explicitNamespace == null || explicitNamespace.isEmpty()
+                ? extractNamespace(option.getRecipeKey())
+                : explicitNamespace;
     }
 
     public static String extractNamespace(String recipeKey) {

@@ -167,7 +167,9 @@ public final class FurnaceRecipeResolver {
 
         RecipeOption previous = options.get(key);
         if (previous == null) {
-            options.put(key, new RecipeOption(key, output));
+            ResourceLocation outputId = output.getItem().getRegistryName();
+            String policyNamespace = outputId == null ? null : outputId.getNamespace();
+            options.put(key, new RecipeOption(key, output, policyNamespace));
             return;
         }
 

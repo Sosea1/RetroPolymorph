@@ -19,6 +19,7 @@ public final class PolymorphConfig {
 
     private static List<String> preferredMods = Collections.emptyList();
     private static List<String> preferredRecipes = Collections.emptyList();
+    private static boolean preferModdedOverVanilla = true;
 
     private static final String CATEGORY_SELECTOR = "selector";
     private static final String CATEGORY_INTEGRATIONS = "integrations";
@@ -55,6 +56,24 @@ public final class PolymorphConfig {
     public static void load(File file) {
         Configuration config = new Configuration(file);
         config.load();
+
+        config.setCategoryComment(
+                CATEGORY_POLICY,
+                "Default recipe-selection policy. Explicit player choices always win.\n"
+                        + "Example:\n"
+                        + "B:preferModdedOverVanilla=true\n"
+                        + "S:preferredMods <\n"
+                        + "    thermalfoundation\n"
+                        + "    mekanism\n"
+                        + "    *\n"
+                        + "    minecraft\n"
+                        + ">\n"
+                        + "S:preferredRecipes <\n"
+                        + "    enderio:example_recipe\n"
+                        + ">\n"
+                        + "Lists are ordered from highest to lowest priority.\n"
+                        + "For furnace conflicts, preferredMods uses the output item's mod namespace.\n"
+                        + "Exact recipe keys can be copied from selector tooltips when selector.showRecipeKeyInTooltip=true.");
 
         selectorEnabled = config.getBoolean(
                 "enabled",
@@ -96,7 +115,7 @@ public final class PolymorphConfig {
                 "rightClickClears",
                 CATEGORY_SELECTOR,
                 true,
-                "Right-clicking the selector button returns to the default recipe.");
+                "Right-clicking the selector button returns to automatic recipe selection.");
         wheelCyclesButton = config.getBoolean(
                 "wheelCyclesButton",
                 CATEGORY_SELECTOR,
@@ -135,6 +154,13 @@ public final class PolymorphConfig {
                 true,
                 "Just Enough Items (JEI) and Had Enough Items (HEI) recipe transfer and GUI exclusion support.");
 
+        preferModdedOverVanilla = config.getBoolean(
+                "preferModdedOverVanilla",
+                CATEGORY_POLICY,
+                true,
+                "When no player choice or explicit policy matches, prefer the first modded recipe when the native default is vanilla.\n"
+                        + "Set false to preserve the native Forge/furnace recipe order.");
+
         String[] rawPreferredMods = config.getStringList(
                 "preferredMods",
                 CATEGORY_POLICY,
@@ -152,7 +178,10 @@ public final class PolymorphConfig {
                         + "Format: recipe_id (e.g. 'enderio:special_recipe').");
         preferredRecipes = parsePreferredRecipes(rawPreferredRecipes);
 
-        RecipePreferencePolicy.configure(preferredMods, preferredRecipes);
+        RecipePreferencePolicy.configure(
+                preferredMods,
+                preferredRecipes,
+                preferModdedOverVanilla);
 
         if (config.hasChanged()) {
             config.save();
@@ -218,6 +247,10 @@ public final class PolymorphConfig {
         return preferredRecipes;
     }
 
+    public static boolean isPreferModdedOverVanilla() {
+        return preferModdedOverVanilla;
+    }
+
     public static List<String> parsePreferredMods(String[] values) {
         if (values == null || values.length == 0) {
             return Collections.emptyList();
@@ -245,7 +278,7 @@ public final class PolymorphConfig {
                 continue;
             }
             String value = raw.trim();
-            if (value.isEmpty() || value.indexOf('=') >= 0) {
+            if (value.isEmpty()) {
                 continue;
             }
             if (RecipeKey.isWireSafe(value) && !result.contains(value)) {

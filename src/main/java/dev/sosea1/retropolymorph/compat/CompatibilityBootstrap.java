@@ -91,6 +91,9 @@ public final class CompatibilityBootstrap {
                 new CustomRecipeEngineGuardAdapter(
                         "blusunrize.immersiveengineering.common.gui.ContainerModWorkbench"));
 
+        // Engineer's Decor 1.12.2 has its own conflict-cycle button only on the
+        // treated-wood crafting table. Guard that exact container instead of
+        // blocking every GUI in the mod package.
         IntegrationHealthRegistry.register(
                 new IntegrationDescriptor("engineersdecor", "Engineer's Decor", PRIORITY_PACKAGE_GUARD),
                 true);
@@ -98,7 +101,8 @@ public final class CompatibilityBootstrap {
         RetroPolymorphAPI.registerAdapter(
                 id("engineers_decor_native_selector"),
                 PRIORITY_PACKAGE_GUARD,
-                new PackagePrefixGuardAdapter("wile.engineersdecor"));
+                new CustomRecipeEngineGuardAdapter(
+                        "wile.engineersdecor.blocks.BlockDecorCraftingTable$BContainer"));
 
         // Modular integration registrations
         for (IntegrationRegistrar registrar : REGISTRARS) {
