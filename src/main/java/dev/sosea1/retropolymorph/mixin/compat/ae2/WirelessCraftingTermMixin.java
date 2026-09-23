@@ -59,28 +59,24 @@ public abstract class WirelessCraftingTermMixin implements Ae2CraftingTermExtens
 
     @Inject(method = "func_75130_a", at = @At("HEAD"), remap = false, require = 0)
     private void retropolymorph$seedWirelessMatrix(IInventory inventory, CallbackInfo ci) {
-        if (!PolymorphConfig.isIntegrationAe2Enabled() || !(inventory instanceof InventoryCrafting)) {
-            return;
-        }
-        InventoryCrafting matrix = (InventoryCrafting) inventory;
-        ResourceLocation selected = retropolymorph$getAe2SelectedRecipeId();
-        if (selected == null) {
-            RecipeSelectionSeeder.clear(matrix);
-            this.retropolymorph$wirelessCurrentRecipe = null;
-            return;
-        }
-        IRecipe recipe = ForgeRegistries.RECIPES.getValue(selected);
-        if (recipe != null) {
-            RecipeSelectionSeeder.seed(matrix, selected);
-            this.retropolymorph$wirelessCurrentRecipe = recipe;
-        }
-    }
-    @Inject(method = "func_75130_a", at = @At("RETURN"), remap = false, require = 0)
-    private void retropolymorph$pinWirelessResult(IInventory inventory, CallbackInfo ci) {
         if (!PolymorphConfig.isIntegrationAe2Enabled()) {
             return;
         }
-        Ae2TerminalRecipePin.pinContainerResult((Container) (Object) this, "wirelessBaseRefresh");
+        Container self = (Container) (Object) this;
+        dev.sosea1.retropolymorph.compat.ae2.Ae2MatrixChangeScope.enter(self);
+        Ae2TerminalRecipePin.handleMatrixChangedHead(self);
+    }
+
+    @Inject(method = "func_75130_a", at = @At("RETURN"), remap = false, require = 0)
+    private void retropolymorph$pinWirelessResult(IInventory inventory, CallbackInfo ci) {
+        try {
+            if (!PolymorphConfig.isIntegrationAe2Enabled()) {
+                return;
+            }
+            Ae2TerminalRecipePin.handleMatrixChangedReturn((Container) (Object) this, "wirelessBaseRefresh");
+        } finally {
+            dev.sosea1.retropolymorph.compat.ae2.Ae2MatrixChangeScope.exit();
+        }
     }
 
 }

@@ -50,4 +50,8 @@ public final class Ae2SelectionStore {
             SELECTED.remove(container);
         }
     }
+
+    public static void clearAll() {
+        SELECTED.clear();
+    }
 }

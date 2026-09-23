@@ -120,15 +120,18 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
 
     @Override
     public void clearSelection() {
-        ResourceLocation selected = getSelectedRecipeIdInternal();
-        if (selected == null) {
-            clearVisibleResultIfGridEmpty();
-            return;
-        }
-
         setSelection(null, null);
         clearNativeMatrices();
-        clearVisibleResultIfGridEmpty();
+        refreshMatrix();
+        World world = this.container != null ? Ae2TerminalRecipePin.resolveWorld(this.container) : null;
+        if (isGridEmpty()) {
+            this.resultSlot.putStack(ItemStack.EMPTY);
+        } else if (world != null && this.container instanceof Ae2CraftingTermExtension) {
+            IRecipe current = ((Ae2CraftingTermExtension) this.container).retropolymorph$getAe2CurrentRecipe();
+            if (current == null || !RecipeProbe.matches(current, this.matrix, world)) {
+                this.resultSlot.putStack(ItemStack.EMPTY);
+            }
+        }
     }
 
     @Override
@@ -142,18 +145,23 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
     public void applyRemoteSelection(@Nullable String recipeKey) {
         ResourceLocation recipeId = RecipeKey.parseForgeId(recipeKey);
         if (recipeId == null) {
-            setSelection(null, null);
-            clearNativeMatrices();
-            clearVisibleResultIfGridEmpty();
+            clearSelection();
             return;
         }
 
         IRecipe recipe = ForgeRegistries.RECIPES.getValue(recipeId);
         if (recipe == null) {
+            clearSelection();
             return;
         }
 
         refreshMatrix();
+        World world = this.container != null ? Ae2TerminalRecipePin.resolveWorld(this.container) : null;
+        if (world != null && !RecipeProbe.matches(recipe, this.matrix, world)) {
+            clearSelection();
+            return;
+        }
+
         setSelection(recipeId, recipe);
         seedNativeMatrices(recipeId);
         putSelectedResult(recipe);
@@ -227,9 +235,12 @@ final class Ae2CraftingTermContext implements RecipeSelectionContext {
             return;
         }
 
-        // Do not ask the terminal to recalculate before writing the selected
-        // result. Native AE2 and WCT both default to the first matching recipe
-        // in that recalculation, which was the source of the misleading preview.
+        World world = this.container != null ? Ae2TerminalRecipePin.resolveWorld(this.container) : null;
+        if (world != null && !RecipeProbe.matches(recipe, this.matrix, world)) {
+            this.resultSlot.putStack(ItemStack.EMPTY);
+            return;
+        }
+
         ItemStack outputStack = RecipeProbe.craftingResult(recipe, this.matrix);
         this.resultSlot.putStack(outputStack);
     }

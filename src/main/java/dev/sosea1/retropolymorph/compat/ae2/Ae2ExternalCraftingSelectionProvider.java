@@ -45,6 +45,19 @@ public final class Ae2ExternalCraftingSelectionProvider implements ExternalCraft
             }
         }
 
+        if (selected == null && matrix.getSizeInventory() == 9) {
+            Container active = Ae2MatrixChangeScope.currentContainer();
+            if (active != null) {
+                selected = Ae2SelectionStore.get(active);
+                if (selected == null && active instanceof Ae2CraftingTermExtension) {
+                    selected = ((Ae2CraftingTermExtension) active).retropolymorph$getAe2SelectedRecipeId();
+                    if (selected != null) {
+                        Ae2SelectionStore.set(active, selected);
+                    }
+                }
+            }
+        }
+
         if (selected == null && Ae2CraftExecutionScope.isActive() && matrix.getSizeInventory() == 9) {
             selected = Ae2CraftExecutionScope.currentSelectedRecipeId();
             if (selected != null) {

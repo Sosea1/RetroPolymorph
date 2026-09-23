@@ -68,29 +68,207 @@ public final class Ae2TerminalRecipePin {
     }
 
     /**
-     * Re-pins a terminal after one of its own matrix refreshes. This path does
-     * not need the World because the selection was already validated by the
-     * selector packet; it is intentionally limited to containers with the AE2
-     * 9+1 marked slot topology.
+     * Resolves the opening player from standard player inventory slots.
      */
-    public static boolean pinContainerResult(Container container, String phase) {
+    @Nullable
+    public static EntityPlayer resolvePlayer(Container container) {
+        if (container == null) {
+            return null;
+        }
+        for (Slot slot : container.inventorySlots) {
+            if (slot != null && slot.inventory instanceof net.minecraft.entity.player.InventoryPlayer) {
+                return ((net.minecraft.entity.player.InventoryPlayer) slot.inventory).player;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the world for this container from its viewing player.
+     */
+    @Nullable
+    public static World resolveWorld(Container container) {
+        EntityPlayer player = resolvePlayer(container);
+        if (player != null && player.world != null) {
+            return player.world;
+        }
+        return null;
+    }
+
+    /**
+     * Clears all selection state associated with the container.
+     */
+    public static void clearSelection(Container container) {
+        if (container == null) {
+            return;
+        }
+        Ae2SelectionStore.set(container, null);
+        if (container instanceof Ae2CraftingTermExtension) {
+            ((Ae2CraftingTermExtension) container).retropolymorph$setAe2SelectedRecipeId(null);
+        }
+        clearNativeMatrices(container);
+    }
+
+    public static void seedNativeMatrices(Container container, ResourceLocation recipeId) {
+        if (container == null || recipeId == null) {
+            return;
+        }
+        InventoryCrafting last = null;
+        for (Slot slot : container.inventorySlots) {
+            if (slot instanceof Ae2CraftingMatrixSlot && slot.inventory instanceof InventoryCrafting) {
+                InventoryCrafting nativeMatrix = (InventoryCrafting) slot.inventory;
+                if (nativeMatrix != last) {
+                    dev.sosea1.retropolymorph.core.RecipeSelectionSeeder.seed(nativeMatrix, recipeId);
+                    last = nativeMatrix;
+                }
+            }
+        }
+    }
+
+    public static void clearNativeMatrices(Container container) {
+        if (container == null) {
+            return;
+        }
+        InventoryCrafting last = null;
+        for (Slot slot : container.inventorySlots) {
+            if (slot instanceof Ae2CraftingMatrixSlot && slot.inventory instanceof InventoryCrafting) {
+                InventoryCrafting nativeMatrix = (InventoryCrafting) slot.inventory;
+                if (nativeMatrix != last) {
+                    dev.sosea1.retropolymorph.core.RecipeSelectionSeeder.clear(nativeMatrix);
+                    last = nativeMatrix;
+                }
+            }
+        }
+    }
+
+    /**
+     * Synchronous matrix change hook executed at onCraftMatrixChanged HEAD.
+     *
+     * <p>Revalidates current selection, clearing any stale selection that no longer
+     * matches the current matrix, and synchronously preseeds the player's saved
+     * preference into AE2's {@code currentRecipe} so AE2 never falls back to the
+     * default first recipe.</p>
+     */
+    public static void handleMatrixChangedHead(Container container) {
+        if (container == null) {
+            return;
+        }
+
+        InventoryCrafting matrix = createMirror(container);
+        if (matrix == null) {
+            return;
+        }
+
+        if (isEmpty(matrix)) {
+            clearSelection(container);
+            if (container instanceof Ae2CraftingTermExtension) {
+                ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);
+            }
+            return;
+        }
+
+        World world = resolveWorld(container);
+        ResourceLocation selectedId = selectedId(container);
+        IRecipe selectedRecipe = selectedId == null ? null : ForgeRegistries.RECIPES.getValue(selectedId);
+
+        if (selectedRecipe != null && RecipeProbe.matches(selectedRecipe, matrix, world)) {
+            if (container instanceof Ae2CraftingTermExtension) {
+                ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(selectedRecipe);
+            }
+            seedNativeMatrices(container, selectedId);
+            return;
+        }
+
+        // Previous selection is no longer valid for this matrix
+        clearSelection(container);
+        if (container instanceof Ae2CraftingTermExtension) {
+            ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);
+        }
+
+        EntityPlayer player = resolvePlayer(container);
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            dev.sosea1.retropolymorph.core.CraftingPreferenceSeeder.preseed(
+                    (net.minecraft.entity.player.EntityPlayerMP) player, container);
+            ResourceLocation preseededId = selectedId(container);
+            if (preseededId != null) {
+                IRecipe preseededRecipe = ForgeRegistries.RECIPES.getValue(preseededId);
+                if (preseededRecipe != null && RecipeProbe.matches(preseededRecipe, matrix, world)) {
+                    if (container instanceof Ae2CraftingTermExtension) {
+                        ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(preseededRecipe);
+                    }
+                    seedNativeMatrices(container, preseededId);
+                } else {
+                    clearSelection(container);
+                }
+            }
+        }
+    }
+
+    /**
+     * Synchronous matrix change hook executed at onCraftMatrixChanged RETURN.
+     *
+     * <p>Validates that the selected recipe actually matches the current matrix
+     * before pinning the result slot. If the recipe no longer matches or the
+     * inputs were broken, any ghost result is immediately cleared.</p>
+     */
+    public static boolean handleMatrixChangedReturn(Container container, String phase) {
         if (container == null) {
             return false;
         }
-        ResourceLocation selectedId = selectedId(container);
-        if (selectedId == null) {
-            return false;
-        }
-        IRecipe recipe = ForgeRegistries.RECIPES.getValue(selectedId);
-        if (recipe == null) {
-            return false;
-        }
+
         InventoryCrafting matrix = createMirror(container);
         Slot result = findResultSlot(container);
-        if (matrix == null || result == null || isEmpty(matrix)) {
+        if (matrix == null || result == null) {
             return false;
         }
+
+        if (isEmpty(matrix)) {
+            clearSelection(container);
+            if (container instanceof Ae2CraftingTermExtension) {
+                ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);
+            }
+            if (!result.getStack().isEmpty()) {
+                result.putStack(ItemStack.EMPTY);
+            }
+            return false;
+        }
+
+        ResourceLocation selectedId = selectedId(container);
+        if (selectedId == null) {
+            if (container instanceof Ae2CraftingTermExtension) {
+                IRecipe current = ((Ae2CraftingTermExtension) container).retropolymorph$getAe2CurrentRecipe();
+                if (current == null && !result.getStack().isEmpty()) {
+                    result.putStack(ItemStack.EMPTY);
+                }
+            }
+            return false;
+        }
+
+        IRecipe recipe = ForgeRegistries.RECIPES.getValue(selectedId);
+        World world = resolveWorld(container);
+
+        if (recipe == null || !RecipeProbe.matches(recipe, matrix, world)) {
+            clearSelection(container);
+            if (container instanceof Ae2CraftingTermExtension) {
+                ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);
+            }
+            if (!result.getStack().isEmpty()) {
+                result.putStack(ItemStack.EMPTY);
+            }
+            return false;
+        }
+
+        if (container instanceof Ae2CraftingTermExtension) {
+            ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(recipe);
+        }
         return pinResult(container, result, recipe, matrix, phase);
+    }
+
+    /**
+     * Re-pins a terminal after one of its own matrix refreshes.
+     */
+    public static boolean pinContainerResult(Container container, String phase) {
+        return handleMatrixChangedReturn(container, phase);
     }
 
     /**
