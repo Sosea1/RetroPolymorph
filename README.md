@@ -155,8 +155,8 @@ fallback would be unsafe.
 ## Addon API
 
 Retro Polymorph exposes a small public API for focused third-party
-integrations. It is intentionally minimal and not yet feature-complete; refer
-to the JavaDoc and built-in integrations in the source tree when adding one.
+integrations. The API is intentionally small; refer to the JavaDoc and built-in
+integrations in the source tree when adding one.
 
 ## Building
 
@@ -171,7 +171,6 @@ The compiled JAR is written to `build/libs/`.
 ## Credits and license
 
 - Illusive Soulworks / TheIllusiveC4 — original Polymorph, concept and inherited UI assets
-- Sosea1 — Minecraft 1.12.2 port, integrations and maintenance
 
 Retro Polymorph is an independent, unofficial port and is not affiliated with
 or endorsed by Illusive Soulworks. The project is licensed under
