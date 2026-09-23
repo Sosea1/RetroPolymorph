@@ -52,7 +52,7 @@ result.
 - JEI / HEI recipe-transfer integration.
 - Optional FastSuite acceleration with a safe Forge-registry fallback.
 - Ordered modpack policy for preferred mods and exact recipes.
-- Focused integrations for custom crafting engines instead of unsafe slot guessing.
+- Focused integrations for supported modded crafting interfaces.
 
 ## Supported integrations
 
@@ -73,17 +73,8 @@ result.
 - Retro Sophisticated Backpacks Crafting Upgrade
 - JEI / HEI transfer and exclusion-area integration
 
-Forestry Worktable and Immersive Engineering Engineer's Workbench are detected
-and left to their native recipe-selection UI instead of receiving a duplicate
-Retro Polymorph selector.
-
-### Retro Sophisticated Backpacks
-
-The Crafting Upgrade is a focused integration. Retro Polymorph resolves the
-active backpack crafting wrapper/output pair and stores the chosen recipe on
-that crafting matrix handler. The common `CraftingManager` hook then uses that
-recipe when the backpack asks Forge for the matching recipe/result/remainders.
-No dedicated RSB mixin is required.
+Forestry Worktable and Immersive Engineering Engineer's Workbench keep their
+native recipe-selection UI instead of receiving a duplicate selector.
 
 ## Usage
 
@@ -131,21 +122,9 @@ fallback would be unsafe.
 
 ## Addon API
 
-Third-party integrations should register a focused adapter through
-`RetroPolymorphAPI` and implement the `RecipeSelectionAdapter.probe(...)`
-contract. Use the standard addon priority unless the integration intentionally
-replaces a built-in adapter.
-
-```java
-RetroPolymorphAPI.registerAdapter(
-        new ResourceLocation("examplemod", "custom_table"),
-        RetroPolymorphAPI.PRIORITY_NORMAL,
-        new ExampleRecipeSelectionAdapter());
-```
-
-Custom machine/processing engines can use `registerMachineAdapter(...)`. Recipe
-keys must be stable and wire-safe, selection must control the real craft path,
-and matching/mutation must remain on the Minecraft server thread.
+Retro Polymorph exposes a small public API for focused third-party
+integrations. It is intentionally minimal and not yet feature-complete; refer
+to the JavaDoc and built-in integrations in the source tree when adding one.
 
 ## Building
 
