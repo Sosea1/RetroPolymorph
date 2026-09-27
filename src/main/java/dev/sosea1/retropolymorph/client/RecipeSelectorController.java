@@ -14,6 +14,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.init.SoundEvents;
 import net.minecraft.item.ItemStack;
+import net.minecraft.inventory.Slot;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.input.Keyboard;
@@ -46,6 +47,7 @@ public final class RecipeSelectorController {
     private boolean buttonReattachLogged;
     private int inputRevision;
     private long appliedSelectionRevision;
+    private long pendingResultSinceNanos;
 
     RecipeSelectorController(
             GuiContainer gui,
@@ -135,6 +137,39 @@ public final class RecipeSelectorController {
         return this.gui == currentGui;
     }
 
+    public boolean shouldMaskResult(Slot slot) {
+        if (slot == null || slot != this.context.getResultSlot()) {
+            return false;
+        }
+        boolean hasInputs = false;
+        for (int index = 0; index < this.context.getInputCount(); index++) {
+            ItemStack input = this.context.getInputStack(index);
+            if (input != null && !input.isEmpty()) {
+                hasInputs = true;
+                break;
+            }
+        }
+        int windowId = this.context.getContainer().windowId;
+        return ClientResultMask.shouldMask(
+                true,
+                hasInputs,
+                !ClientSelectionTracker.hasAuthoritativeSnapshotForWindow(windowId),
+                this.pendingResultSinceNanos,
+                System.nanoTime());
+    }
+
+    boolean isPendingResultAt(int mouseX, int mouseY) {
+        Slot result = this.context.getResultSlot();
+        if (!shouldMaskResult(result)) {
+            return false;
+        }
+        GuiContainerAccessor accessor = (GuiContainerAccessor) this.gui;
+        return contains(mouseX, mouseY,
+                accessor.retropolymorph$getGuiLeft() + result.xPos,
+                accessor.retropolymorph$getGuiTop() + result.yPos,
+                16, 16);
+    }
+
     public boolean isRightClickClearEnabled() {
         return this.rightClickClears;
     }
@@ -169,14 +204,13 @@ public final class RecipeSelectorController {
 
         boolean inputsChanged = this.cache.refreshInputs(this.context);
         if (windowChanged || inputsChanged) {
+            this.pendingResultSinceNanos = System.nanoTime();
             this.inputRevision = nextInputRevision(this.inputRevision);
             ClientSelectionTracker.expectInputRevision(
                     windowId, this.sessionToken, this.inputRevision);
-            // A successful craft changes stack counts one tick before the server's
-            // refreshed recipe list returns. Clearing choices here hid the selector
-            // during that round-trip, which looked like a button flicker on every
-            // WCT/AE2 craft. Keep the last authoritative choices visible for ordinary
-            // input changes; a real window rebind must still discard stale choices.
+            // ClientRecipeCache keeps choices across count-only consumption, but
+            // clears them when the actual template changes. A window rebind also
+            // discards choices belonging to the previous server window.
             if (windowChanged) {
                 this.cache.clearChoices();
             }

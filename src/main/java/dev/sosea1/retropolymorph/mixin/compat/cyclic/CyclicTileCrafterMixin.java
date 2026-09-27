@@ -2,9 +2,12 @@ package dev.sosea1.retropolymorph.mixin.compat.cyclic;
 
 import dev.sosea1.retropolymorph.api.RecipeKey;
 import dev.sosea1.retropolymorph.compat.cyclic.CyclicSelectionAccess;
+import dev.sosea1.retropolymorph.compat.cyclic.CyclicTemplateSelections;
 import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import dev.sosea1.retropolymorph.core.RecipeSelectionSeeder;
 import net.minecraft.inventory.InventoryCrafting;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -43,14 +46,28 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
     @Nullable
     private ResourceLocation retropolymorph$selectedRecipeId;
 
+    @Unique
+    private final CyclicTemplateSelections retropolymorph$templateSelections =
+            new CyclicTemplateSelections();
+
+    @Unique
+    @Nullable
+    private ItemStack[] retropolymorph$lastResolvedTemplate;
+
     @Override
     @Nullable
     public ResourceLocation retropolymorph$getSelectedRecipeId() {
-        return this.retropolymorph$selectedRecipeId;
+        return this.retropolymorph$templateSelections.lookup(retropolymorph$currentTemplate());
     }
 
     @Override
     public void retropolymorph$setSelectedRecipeId(@Nullable ResourceLocation recipeId) {
+        ItemStack[] template = retropolymorph$currentTemplate();
+        if (recipeId == null) {
+            this.retropolymorph$templateSelections.forget(template);
+        } else {
+            this.retropolymorph$templateSelections.remember(template, recipeId);
+        }
         this.retropolymorph$selectedRecipeId = recipeId;
         this.recipe = null;
         this.lastInvHash = -1;
@@ -74,10 +91,16 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
         if (!PolymorphConfig.isIntegrationCyclicEnabled()) {
             return;
         }
+        this.retropolymorph$lastResolvedTemplate =
+                retropolymorph$copyTemplate(retropolymorph$currentTemplate());
         if (this.crafter != null) {
+            this.retropolymorph$selectedRecipeId =
+                    this.retropolymorph$templateSelections.lookup(retropolymorph$currentTemplate());
             this.recipe = null;
             if (this.retropolymorph$selectedRecipeId != null) {
                 RecipeSelectionSeeder.seed(this.crafter, this.retropolymorph$selectedRecipeId);
+            } else {
+                RecipeSelectionSeeder.clear(this.crafter);
             }
         }
     }
@@ -103,6 +126,7 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
         } else {
             target.setString(RETROPOLYMORPH_RECIPE_TAG, selected.toString());
         }
+        this.retropolymorph$templateSelections.writeToNBT(target);
     }
 
     @Inject(
@@ -114,10 +138,67 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
         if (!PolymorphConfig.isIntegrationCyclicEnabled()) {
             return;
         }
-        if (tag != null && tag.hasKey(RETROPOLYMORPH_RECIPE_TAG, 8)) {
-            this.retropolymorph$selectedRecipeId =
-                    RecipeKey.parseForgeId(tag.getString(RETROPOLYMORPH_RECIPE_TAG));
-            this.recipe = null;
+        ResourceLocation legacySelection = tag != null && tag.hasKey(RETROPOLYMORPH_RECIPE_TAG, 8)
+                ? RecipeKey.parseForgeId(tag.getString(RETROPOLYMORPH_RECIPE_TAG))
+                : null;
+        this.retropolymorph$templateSelections.readFromNBT(tag);
+        if (legacySelection != null
+                && this.retropolymorph$templateSelections.lookup(retropolymorph$currentTemplate()) == null) {
+            this.retropolymorph$templateSelections.remember(retropolymorph$currentTemplate(), legacySelection);
         }
+        this.retropolymorph$selectedRecipeId =
+                this.retropolymorph$templateSelections.lookup(retropolymorph$currentTemplate());
+        this.recipe = null;
+        this.lastInvHash = -1;
+        this.retropolymorph$lastResolvedTemplate = null;
+    }
+
+    @Inject(method = "getRecipeResult", at = @At("HEAD"), remap = false, require = 0)
+    private void retropolymorph$refreshChangedTemplate(CallbackInfoReturnable<ItemStack> cir) {
+        if (!PolymorphConfig.isIntegrationCyclicEnabled()) {
+            return;
+        }
+        TileEntity tile = (TileEntity) (Object) this;
+        if (tile.getWorld() == null) {
+            return;
+        }
+        ItemStack[] template = retropolymorph$currentTemplate();
+        if (retropolymorph$sameTemplate(this.retropolymorph$lastResolvedTemplate, template)) {
+            return;
+        }
+        findRecipe();
+    }
+
+    @Unique
+    private ItemStack[] retropolymorph$currentTemplate() {
+        IInventory inventory = (IInventory) (Object) this;
+        ItemStack[] template = new ItemStack[9];
+        for (int i = 0; i < template.length; i++) {
+            template[i] = inventory.getStackInSlot(10 + i);
+        }
+        return template;
+    }
+
+    @Unique
+    private static ItemStack[] retropolymorph$copyTemplate(ItemStack[] template) {
+        ItemStack[] copy = new ItemStack[template.length];
+        for (int i = 0; i < template.length; i++) {
+            ItemStack stack = template[i];
+            copy[i] = stack == null || stack.isEmpty() ? ItemStack.EMPTY : stack.copy();
+        }
+        return copy;
+    }
+
+    @Unique
+    private static boolean retropolymorph$sameTemplate(@Nullable ItemStack[] before, ItemStack[] after) {
+        if (before == null || before.length != after.length) {
+            return false;
+        }
+        for (int i = 0; i < after.length; i++) {
+            if (!ItemStack.areItemStacksEqual(before[i], after[i])) {
+                return false;
+            }
+        }
+        return true;
     }
 }

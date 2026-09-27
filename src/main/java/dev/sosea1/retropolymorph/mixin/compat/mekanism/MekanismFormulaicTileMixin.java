@@ -5,7 +5,6 @@ import dev.sosea1.retropolymorph.compat.mekanism.MekanismFormulaicTileAccess;
 import dev.sosea1.retropolymorph.core.RecipeSelectionSeeder;
 import dev.sosea1.retropolymorph.config.PolymorphConfig;
 import mekanism.common.content.assemblicator.RecipeFormula;
-import mekanism.common.tile.machine.TileEntityFormulaicAssemblicator;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.tileentity.TileEntity;
@@ -22,7 +21,10 @@ import javax.annotation.Nullable;
 
 /** Makes Mekanism's native cachedRecipe honor the shared RetroPolymorph selection. */
 @Pseudo
-@Mixin(value = TileEntityFormulaicAssemblicator.class, remap = false)
+@Mixin(targets = {
+        "mekanism.common.tile.TileEntityFormulaicAssemblicator",
+        "mekanism.common.tile.machine.TileEntityFormulaicAssemblicator"
+}, remap = false)
 public abstract class MekanismFormulaicTileMixin implements MekanismFormulaicTileAccess {
 
     @Shadow(remap = false)

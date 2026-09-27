@@ -23,6 +23,13 @@ final class ClientRecipeCache {
             return false;
         }
 
+        if (this.context != currentContext
+                || this.stateToken != currentContext.getClientStateToken()
+                || !snapshotIngredientsMatch(currentContext)) {
+            // A different template must not leave clickable choices from the
+            // previous recipe visible while the server query is in flight.
+            clearChoices();
+        }
         this.context = currentContext;
         this.stateToken = currentContext.getClientStateToken();
         captureSnapshot(currentContext);
@@ -63,6 +70,24 @@ final class ClientRecipeCache {
             if (!ItemStack.areItemStacksEqual(
                     this.snapshot[slot],
                     currentContext.getInputStack(slot))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean snapshotIngredientsMatch(SelectionContext currentContext) {
+        if (this.snapshot.length != currentContext.getInputCount()) {
+            return false;
+        }
+        for (int slot = 0; slot < this.snapshot.length; slot++) {
+            ItemStack before = this.snapshot[slot];
+            ItemStack after = currentContext.getInputStack(slot);
+            if (before.isEmpty() != after.isEmpty()) {
+                return false;
+            }
+            if (!before.isEmpty() && (!ItemStack.areItemsEqual(before, after)
+                    || !ItemStack.areItemStackTagsEqual(before, after))) {
                 return false;
             }
         }

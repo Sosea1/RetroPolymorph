@@ -302,7 +302,7 @@ public final class SelectionServiceTest {
         SelectionServiceResult result = SelectionService.handle(null, this.playerData, ctx, SelectionCommand.query());
         assertNull(result.getSelectedRecipeKey());
         assertNull(ctx.selectedKey);
-        assertFalse(result.isAccepted());
+        assertTrue(result.isAccepted(), "Refreshing a changed template is not a rejected player selection");
     }
 
     @Test

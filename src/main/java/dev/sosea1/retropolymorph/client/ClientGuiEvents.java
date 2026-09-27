@@ -48,6 +48,11 @@ public final class ClientGuiEvents {
         return controller;
     }
 
+    public static boolean shouldMaskResult(GuiContainer gui, Slot slot) {
+        RecipeSelectorController current = controller;
+        return current != null && current.owns(gui) && current.shouldMaskResult(slot);
+    }
+
     @SubscribeEvent
     public void onGuiOpen(GuiOpenEvent event) {
         controller = null;
@@ -214,6 +219,11 @@ public final class ClientGuiEvents {
         int button = Mouse.getEventButton();
         boolean pressed = button >= 0 && Mouse.getEventButtonState();
         int wheel = Mouse.getEventDWheel();
+
+        if (pressed && current.isPendingResultAt(mouseX, mouseY)) {
+            event.setCanceled(true);
+            return;
+        }
 
         if (current.handleMouseInput(mouseX, mouseY, button, pressed, wheel)) {
             event.setCanceled(true);

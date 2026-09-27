@@ -130,7 +130,7 @@ public final class SelectionService {
             // Drop authoritative selection that no longer belongs to the live options.
             SelectionContextGuard.clear(context);
             selectedAfter = null;
-            accepted = false;
+            accepted = command.isQuery();
             reason = SelectionReason.NATIVE_DEFAULT;
         }
 
@@ -143,13 +143,6 @@ public final class SelectionService {
             // Populate/refresh the cheap recipe-aware input aliases after
             // the canonical conflict preference has been authoritatively resolved.
             rememberInputAliases(playerEntityData, context, selectedAfter, world);
-        }
-
-        if (staleSelectionCleared && selectedAfter == null) {
-            // Preserve the query contract: merely discarding a stale state is
-            // not an accepted selection. A valid preference or policy choice
-            // selected above remains accepted.
-            accepted = false;
         }
 
         boolean selectionChanged = !sameRecipeKey(selectedBefore, selectedAfter);

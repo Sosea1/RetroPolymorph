@@ -2,6 +2,7 @@ package dev.sosea1.retropolymorph.compat.ae2;
 
 import dev.sosea1.retropolymorph.core.RecipeProbe;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.InventoryCrafting;
@@ -15,6 +16,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -70,7 +72,7 @@ public final class Ae2TerminalRecipePin {
     /**
      * Resolves the opening player from the container.
      *
-     * <p>For real AE2 containers the bridge method is tried first because
+     * <p>For real AE2 containers their public inherited player-inventory method is tried first because
      * {@code AppEngSlot} always passes {@code emptyInventory} to the Slot superclass,
      * so {@code slot.inventory instanceof InventoryPlayer} is always false there.
      * The generic slot-scan remains as a fallback for vanilla/other containers.</p>
@@ -80,12 +82,16 @@ public final class Ae2TerminalRecipePin {
         if (container == null) {
             return null;
         }
-        // AE2 bridge — only reliable path for real AE2 containers
-        if (container instanceof Ae2CraftingTermExtension) {
-            EntityPlayer bridgePlayer = ((Ae2CraftingTermExtension) container).retropolymorph$getAe2Player();
-            if (bridgePlayer != null) {
-                return bridgePlayer;
+        // getPlayerInv() belongs to AEBaseContainer, not the terminal subclass.
+        // A subclass-targeted Mixin @Shadow fails to apply on older AE2 builds.
+        try {
+            Method getter = container.getClass().getMethod("getPlayerInv");
+            Object inventory = getter.invoke(container);
+            if (inventory instanceof InventoryPlayer) {
+                return ((InventoryPlayer) inventory).player;
             }
+        } catch (ReflectiveOperationException | SecurityException | LinkageError ignored) {
+            // Non-AE2 container: keep the generic slot fallback below.
         }
         // Generic fallback for vanilla and other containers
         for (Slot slot : container.inventorySlots) {

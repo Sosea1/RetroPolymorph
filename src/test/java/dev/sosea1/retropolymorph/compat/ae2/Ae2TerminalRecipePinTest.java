@@ -109,6 +109,15 @@ public final class Ae2TerminalRecipePinTest {
     }
 
     @Test
+    public void testInheritedAe2PlayerInventoryResolvesWithoutMixinBridge() {
+        MockAe2Container container = new MockAe2Container();
+        EntityPlayerMP player = createMockPlayer(createDummyWorld(), new NBTTagCompound());
+        container.setPlayer(player);
+
+        assertEquals(player, Ae2TerminalRecipePin.resolvePlayer(container));
+    }
+
+    @Test
     public void testGhostResultClearedWhenRecipeBroken() {
         MockAe2Container container = new MockAe2Container();
         // Simulate broken input (e.g. removed one cobblestone)
@@ -407,6 +416,10 @@ public final class Ae2TerminalRecipePinTest {
             this.player = player;
         }
 
+        public InventoryPlayer getPlayerInv() {
+            return this.player == null ? null : createMockInventoryPlayer(this.player);
+        }
+
         MockMatrixSlot getMatrixSlot(int index) {
             return this.matrixSlots[index];
         }
@@ -450,14 +463,5 @@ public final class Ae2TerminalRecipePinTest {
             Ae2SelectionStore.set(this, recipeId);
         }
 
-        /**
-         * Bridge method: returns the player directly from the stored field,
-         * matching the real mixin that calls AEBaseContainer#getPlayerInv().
-         */
-        @Nullable
-        @Override
-        public EntityPlayer retropolymorph$getAe2Player() {
-            return this.player;
-        }
     }
 }

@@ -18,6 +18,7 @@
   ],
   "client": [
     "GuiContainerAccessor",
+    "GuiContainerResultMaskMixin",
     "GuiScreenAccessor"
   ],
   "server": [],
