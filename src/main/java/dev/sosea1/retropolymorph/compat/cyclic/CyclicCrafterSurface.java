@@ -73,6 +73,18 @@ final class CyclicCrafterSurface implements MachineRecipeSurface {
     }
 
     @Override
+    public int getClientStateToken() {
+        // The selected recipe belongs to the template, not to the GUI session.
+        // Cyclic synchronizes tile NBT independently of container slots, so the
+        // template can remain identical while its restored selection changes.
+        if (this.selection == null) {
+            return 0;
+        }
+        ResourceLocation selected = this.selection.retropolymorph$getSelectedRecipeId();
+        return selected == null ? 0 : selected.hashCode();
+    }
+
+    @Override
     public List<RecipeOption> findOptions(World world) {
         if (world == null || isGridEmpty()) {
             return Collections.emptyList();

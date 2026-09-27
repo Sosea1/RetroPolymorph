@@ -8,6 +8,7 @@ import net.minecraft.util.ResourceLocation;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** Bounded, tile-owned recipe choices for Cyclic's nine-slot template grid. */
@@ -16,7 +17,8 @@ public final class CyclicTemplateSelections {
     private static final String TAG = "RetroPolymorphTemplates";
     private static final String GRID_TAG = "Grid";
     private static final String RECIPE_TAG = "Recipe";
-    private static final int GRID_SIZE = 9;
+    private static final int GRID_WIDTH = 3;
+    private static final int GRID_SIZE = GRID_WIDTH * GRID_WIDTH;
     private static final int MAX_TEMPLATES = 64;
 
     private final List<Entry> entries = new ArrayList<Entry>();
@@ -26,9 +28,10 @@ public final class CyclicTemplateSelections {
         if (!isValidGrid(grid)) {
             return null;
         }
+        ItemStack[] normalized = normalizeGrid(grid);
         for (int i = this.entries.size() - 1; i >= 0; i--) {
             Entry entry = this.entries.get(i);
-            if (matches(entry.grid, grid)) {
+            if (matches(entry.grid, normalized)) {
                 return entry.recipeId;
             }
         }
@@ -39,19 +42,24 @@ public final class CyclicTemplateSelections {
         if (!isValidGrid(grid) || recipeId == null) {
             return;
         }
-        forget(grid);
+        ItemStack[] normalized = normalizeGrid(grid);
+        forgetNormalized(normalized);
         if (this.entries.size() == MAX_TEMPLATES) {
             this.entries.remove(0);
         }
-        this.entries.add(new Entry(copyGrid(grid), recipeId));
+        this.entries.add(new Entry(normalized, recipeId));
     }
 
     public void forget(ItemStack[] grid) {
         if (!isValidGrid(grid)) {
             return;
         }
+        forgetNormalized(normalizeGrid(grid));
+    }
+
+    private void forgetNormalized(ItemStack[] normalized) {
         for (int i = this.entries.size() - 1; i >= 0; i--) {
-            if (matches(this.entries.get(i).grid, grid)) {
+            if (matches(this.entries.get(i).grid, normalized)) {
                 this.entries.remove(i);
             }
         }
@@ -98,6 +106,8 @@ public final class CyclicTemplateSelections {
             for (int slot = 0; slot < GRID_SIZE; slot++) {
                 grid[slot] = new ItemStack(stacks.getCompoundTagAt(slot));
             }
+            // remember() normalizes legacy absolute-position entries too, so
+            // old worlds migrate automatically on the next save.
             remember(grid, recipeId);
         }
     }
@@ -114,18 +124,33 @@ public final class CyclicTemplateSelections {
         return false;
     }
 
-    private static ItemStack[] copyGrid(ItemStack[] grid) {
-        ItemStack[] copy = new ItemStack[GRID_SIZE];
-        for (int i = 0; i < GRID_SIZE; i++) {
-            ItemStack stack = grid[i];
+    /** Normalizes translation within Cyclic's absolute 3x3 tile grid. */
+    private static ItemStack[] normalizeGrid(ItemStack[] grid) {
+        int minRow = GRID_WIDTH;
+        int minColumn = GRID_WIDTH;
+        for (int slot = 0; slot < GRID_SIZE; slot++) {
+            ItemStack stack = grid[slot];
             if (stack == null || stack.isEmpty()) {
-                copy[i] = ItemStack.EMPTY;
-            } else {
-                copy[i] = stack.copy();
-                copy[i].setCount(1);
+                continue;
             }
+            minRow = Math.min(minRow, slot / GRID_WIDTH);
+            minColumn = Math.min(minColumn, slot % GRID_WIDTH);
         }
-        return copy;
+
+        ItemStack[] normalized = new ItemStack[GRID_SIZE];
+        Arrays.fill(normalized, ItemStack.EMPTY);
+        for (int slot = 0; slot < GRID_SIZE; slot++) {
+            ItemStack stack = grid[slot];
+            if (stack == null || stack.isEmpty()) {
+                continue;
+            }
+            int row = slot / GRID_WIDTH - minRow;
+            int column = slot % GRID_WIDTH - minColumn;
+            ItemStack copy = stack.copy();
+            copy.setCount(1);
+            normalized[row * GRID_WIDTH + column] = copy;
+        }
+        return normalized;
     }
 
     private static boolean matches(ItemStack[] saved, ItemStack[] current) {

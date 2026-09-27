@@ -261,7 +261,7 @@ public final class RecipeSelectorController {
         updateButtonPosition();
         List<RecipeOption> choices = this.cache.getChoices();
         this.button.visible = choices.size() > 1 && this.context.getSelectorPlacement().isVisible();
-        String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
+        String selected = effectiveSelectedRecipeKey(windowId);
         boolean error = !ClientSelectionTracker.wasLastAccepted(windowId, this.sessionToken);
         this.button.setState(selected != null, error);
 
@@ -278,7 +278,7 @@ public final class RecipeSelectorController {
 
         Minecraft mc = Minecraft.getMinecraft();
         int windowId = this.context.getContainer().windowId;
-        String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
+        String selected = effectiveSelectedRecipeKey(windowId);
         SelectionReason reason = ClientSelectionTracker.getLastReason(windowId, this.sessionToken);
         if (this.expanded) {
             List<RecipeOption> choices = this.cache.getChoices();
@@ -326,9 +326,7 @@ public final class RecipeSelectorController {
         if (this.expanded) {
             List<RecipeOption> choices = this.cache.getChoices();
             updateLayout(choices.size());
-            String selected = ClientSelectionTracker.getSelectedRecipeKey(
-                    this.context.getContainer().windowId,
-                    this.sessionToken);
+            String selected = effectiveSelectedRecipeKey(this.context.getContainer().windowId);
             int selectedIndex = indexOfRecipeKey(choices, selected);
             this.navigation.focusSelectedOrFirst(choices.size(), selectedIndex);
             this.layout.ensureVisible(this.navigation.getFocusedIndex());
@@ -464,8 +462,7 @@ public final class RecipeSelectorController {
         if (choices.size() <= 1) {
             return;
         }
-        String selected = ClientSelectionTracker.getSelectedRecipeKey(
-                this.context.getContainer().windowId, this.sessionToken);
+        String selected = effectiveSelectedRecipeKey(this.context.getContainer().windowId);
         int target = this.navigation.cycleFromSelection(
                 indexOfRecipeKey(choices, selected), delta, choices.size());
         if (target >= 0) {
@@ -580,6 +577,21 @@ public final class RecipeSelectorController {
                 this.button.width,
                 this.button.height,
                 choiceCount);
+    }
+
+    private String effectiveSelectedRecipeKey(int windowId) {
+        String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
+        if (selected != null) {
+            return selected;
+        }
+
+        // Owner-persistent machine selections may already be present in client
+        // tile NBT before the authoritative selector snapshot is refreshed.
+        // Use them for presentation only; the server still owns selection.
+        if (!ClientSelectionTracker.hasAuthoritativeSnapshotForWindow(windowId)) {
+            return this.context.getSelectedRecipeKey();
+        }
+        return null;
     }
 
     private static void playSelectionSound(Minecraft mc) {

@@ -120,7 +120,12 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
         if (target == null) {
             return;
         }
-        ResourceLocation selected = this.retropolymorph$selectedRecipeId;
+        // The tile may be idle after its template changed, so this cache field
+        // can describe the previous grid. Persist the selection for the grid
+        // currently stored in the tile instead.
+        ResourceLocation selected =
+                this.retropolymorph$templateSelections.lookup(retropolymorph$currentTemplate());
+        this.retropolymorph$selectedRecipeId = selected;
         if (selected == null) {
             target.removeTag(RETROPOLYMORPH_RECIPE_TAG);
         } else {
