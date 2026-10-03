@@ -12,18 +12,7 @@ import javax.annotation.Nullable;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-/**
- * Conservative generic detector for containers that expose a real
- * InventoryCrafting through their slots.
- *
- * The exact SlotCrafting -> craftMatrix link is preferred because it proves the
- * result slot and matrix belong together. The looser inventory-topology path is
- * only a fallback for custom result-slot classes. Ambiguous layouts are rejected
- * instead of guessing.
- *
- * No reflection and no class-name guesses live here. Custom engines belong in
- * focused adapters.
- */
+/** Conservative detector for vanilla-style containers backed by a real InventoryCrafting. */
 public final class CraftingContextDetector {
 
     private CraftingContextDetector() {

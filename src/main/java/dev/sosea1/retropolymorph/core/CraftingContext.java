@@ -14,10 +14,7 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * A detected user-facing crafting context backed by a real InventoryCrafting
- * and the normal Forge recipe registry.
- */
+/** Forge-recipe selection context backed by a real InventoryCrafting. */
 public class CraftingContext implements RecipeSelectionContext {
 
     private final Container container;
@@ -122,13 +119,12 @@ public class CraftingContext implements RecipeSelectionContext {
         }
 
         extension().retropolymorph$getOrCreateRecipeSelectionState().select(recipeId);
-        // Several 1.12 mod GUIs recompute their preview locally. Without mirroring
-        // the authoritative selection into the client matrix they keep drawing
-        // Forge's first match even though the server crafts the selected recipe.
+        // Mirror server selection into GUIs that recompute their preview locally.
         refreshOutput();
     }
 
     public void refreshOutput() {
+        ContainerRecipeCacheHelper.clearLastRecipe(this.container);
         this.container.onCraftMatrixChanged(this.matrix);
     }
 

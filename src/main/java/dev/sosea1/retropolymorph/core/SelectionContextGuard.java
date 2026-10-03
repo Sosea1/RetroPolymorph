@@ -12,14 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Server-side failure boundary around optional integration contexts.
- *
- * <p>An adapter is an enhancement, not a prerequisite for the owning machine to
- * function. If a third-party update or reflection mismatch makes a context throw,
- * fail open: stop applying RetroPolymorph selection for that request and let the
- * native container keep its own behavior.</p>
- */
+/** Fail-open boundary around optional third-party selection contexts. */
 public final class SelectionContextGuard {
 
     private static final Logger LOGGER = LogManager.getLogger("Retro Polymorph");

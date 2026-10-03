@@ -5,12 +5,11 @@ import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.registry.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 public final class RecipeResolver {
 
@@ -25,13 +24,13 @@ public final class RecipeResolver {
                 }
             };
 
-    private static final AtomicLong CACHE_HITS = new AtomicLong();
-    private static final AtomicLong CACHE_MISSES = new AtomicLong();
-    private static final AtomicLong FULL_SCANS = new AtomicLong();
-    private static final AtomicLong FASTSUITE_SCANS = new AtomicLong();
-    private static final AtomicLong RECIPES_VISITED = new AtomicLong();
-    private static final AtomicLong VISITED_COUNTED_SCANS = new AtomicLong();
-    private static final AtomicLong SCAN_NANOS = new AtomicLong();
+    private static final LongAdder CACHE_HITS = new LongAdder();
+    private static final LongAdder CACHE_MISSES = new LongAdder();
+    private static final LongAdder FULL_SCANS = new LongAdder();
+    private static final LongAdder FASTSUITE_SCANS = new LongAdder();
+    private static final LongAdder RECIPES_VISITED = new LongAdder();
+    private static final LongAdder VISITED_COUNTED_SCANS = new LongAdder();
+    private static final LongAdder SCAN_NANOS = new LongAdder();
 
     private RecipeResolver() {
     }
@@ -45,25 +44,22 @@ public final class RecipeResolver {
         CraftingMatchCache cache = CACHE.get();
         List<IRecipe> cached = cache.get(clean, world);
         if (cached != null) {
-            CACHE_HITS.incrementAndGet();
+            CACHE_HITS.increment();
             return cached;
         }
 
-        CACHE_MISSES.incrementAndGet();
+        CACHE_MISSES.increment();
         long started = System.nanoTime();
 
-        // Exactly two lookup modes:
-        // 1) current FastSuite conservative candidate API when FastSuite is available;
-        // 2) complete Forge registry scan when FastSuite is absent or its current API failed.
         List<IRecipe> fastSuiteMatches = FastSuiteInterop.findAllMatches(clean, world);
         if (fastSuiteMatches != null) {
-            FASTSUITE_SCANS.incrementAndGet();
-            SCAN_NANOS.addAndGet(System.nanoTime() - started);
+            FASTSUITE_SCANS.increment();
+            SCAN_NANOS.add(System.nanoTime() - started);
             cache.put(clean, world, fastSuiteMatches);
             return fastSuiteMatches;
         }
 
-        FULL_SCANS.incrementAndGet();
+        FULL_SCANS.increment();
         FastSuiteInterop.noteForgeScan();
         List<IRecipe> matches = new ArrayList<IRecipe>(4);
         long visited = 0L;
@@ -74,9 +70,9 @@ public final class RecipeResolver {
             }
         }
 
-        RECIPES_VISITED.addAndGet(visited);
-        VISITED_COUNTED_SCANS.incrementAndGet();
-        SCAN_NANOS.addAndGet(System.nanoTime() - started);
+        RECIPES_VISITED.add(visited);
+        VISITED_COUNTED_SCANS.increment();
+        SCAN_NANOS.add(System.nanoTime() - started);
 
         List<IRecipe> result = matches.isEmpty()
                 ? Collections.<IRecipe>emptyList()
@@ -87,23 +83,23 @@ public final class RecipeResolver {
 
     public static Stats getStats() {
         return new Stats(
-                CACHE_HITS.get(),
-                CACHE_MISSES.get(),
-                FULL_SCANS.get(),
-                FASTSUITE_SCANS.get(),
-                RECIPES_VISITED.get(),
-                VISITED_COUNTED_SCANS.get(),
-                SCAN_NANOS.get());
+                CACHE_HITS.sum(),
+                CACHE_MISSES.sum(),
+                FULL_SCANS.sum(),
+                FASTSUITE_SCANS.sum(),
+                RECIPES_VISITED.sum(),
+                VISITED_COUNTED_SCANS.sum(),
+                SCAN_NANOS.sum());
     }
 
     public static void resetStats() {
-        CACHE_HITS.set(0L);
-        CACHE_MISSES.set(0L);
-        FULL_SCANS.set(0L);
-        FASTSUITE_SCANS.set(0L);
-        RECIPES_VISITED.set(0L);
-        VISITED_COUNTED_SCANS.set(0L);
-        SCAN_NANOS.set(0L);
+        CACHE_HITS.reset();
+        CACHE_MISSES.reset();
+        FULL_SCANS.reset();
+        FASTSUITE_SCANS.reset();
+        RECIPES_VISITED.reset();
+        VISITED_COUNTED_SCANS.reset();
+        SCAN_NANOS.reset();
     }
 
     private static boolean isEmpty(InventoryCrafting matrix) {

@@ -13,10 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Builds visible crafting options while preserving registry order and collapsing only
- * recipes that are behaviorally equivalent for the current matrix.
- */
+/** Builds visible, behaviorally distinct crafting options in registry order. */
 public final class CraftingRecipeOptionCollector {
 
     private CraftingRecipeOptionCollector() {
@@ -55,6 +52,7 @@ public final class CraftingRecipeOptionCollector {
             return Collections.emptyList();
         }
 
+        InventoryCrafting clean = RecipeProbe.sanitizeMatrix(matrix);
         ArrayList<Entry> accepted = new ArrayList<Entry>(Math.min(matches.size(), 16));
         for (IRecipe recipe : matches) {
             if (recipe == null) {
@@ -71,7 +69,7 @@ public final class CraftingRecipeOptionCollector {
                 continue;
             }
 
-            if (containsEquivalent(accepted, recipe, output, matrix)) {
+            if (containsEquivalent(accepted, recipe, output, clean)) {
                 continue;
             }
             accepted.add(new Entry(recipe, new RecipeOption(key, output.copy())));
@@ -105,10 +103,7 @@ public final class CraftingRecipeOptionCollector {
         return false;
     }
 
-    /**
-     * If either custom recipe cannot safely expose remainders during the probe, keep both entries.
-     * Deduplication is an optimization/UX cleanup and must never become a correctness requirement.
-     */
+    /** Failed remainder probes keep both recipes; dedupe must never affect correctness. */
     private static boolean sameRemainders(
             IRecipe first,
             IRecipe second,

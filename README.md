@@ -67,6 +67,9 @@ result.
 - Thaumcraft 6 Arcane Workbench
 - Cyclic Workbench and Auto-Crafter
 - IndustrialCraft 2 Batch Crafter and Industrial Workbench
+- GregTech CE / CEu Workbench
+- Avaritia Extreme Crafting Table
+- Artisan Worktables (custom recipes and vanilla crafting fallback)
 - Mekanism Formulaic Assemblicator (manual mode)
 - Thermal Expansion Sequential Fabricator
 - Extra Utilities 2 Mechanical / Analog Crafter

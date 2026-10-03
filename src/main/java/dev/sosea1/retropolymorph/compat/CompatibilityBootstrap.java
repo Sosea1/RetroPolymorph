@@ -2,10 +2,13 @@ package dev.sosea1.retropolymorph.compat;
 
 import dev.sosea1.retropolymorph.api.RetroPolymorphAPI;
 import dev.sosea1.retropolymorph.compat.ae2.Ae2Integration;
+import dev.sosea1.retropolymorph.compat.artisanworktables.ArtisanWorktablesIntegration;
+import dev.sosea1.retropolymorph.compat.avaritia.AvaritiaIntegration;
 import dev.sosea1.retropolymorph.compat.cyclic.CyclicIntegration;
 import dev.sosea1.retropolymorph.compat.enderio.EnderIoIntegration;
 import dev.sosea1.retropolymorph.compat.extendedcrafting.ExtendedCraftingIntegration;
 import dev.sosea1.retropolymorph.compat.extrautils2.ExtraUtils2Integration;
+import dev.sosea1.retropolymorph.compat.gregtech.GregTechIntegration;
 import dev.sosea1.retropolymorph.compat.ic2.Ic2Integration;
 import dev.sosea1.retropolymorph.compat.mekanism.MekanismIntegration;
 import dev.sosea1.retropolymorph.compat.refinedstorage.RefinedStorageIntegration;
@@ -58,11 +61,14 @@ public final class CompatibilityBootstrap {
                     ExtraUtils2Integration.INSTANCE,
                     EnderIoIntegration.INSTANCE,
                     ThaumcraftIntegration.INSTANCE,
+                    AvaritiaIntegration.INSTANCE,
+                    ArtisanWorktablesIntegration.INSTANCE,
                     Ae2Integration.INSTANCE,
                     ExtendedCraftingIntegration.INSTANCE,
                     Ic2Integration.INSTANCE,
                     CyclicIntegration.INSTANCE,
                     RftoolsIntegration.INSTANCE,
+                    GregTechIntegration.INSTANCE,
                     TinkersIntegration.INSTANCE,
                     dev.sosea1.retropolymorph.compat.forestry.ForestryGuardIntegration.INSTANCE,
                     MekanismIntegration.INSTANCE,

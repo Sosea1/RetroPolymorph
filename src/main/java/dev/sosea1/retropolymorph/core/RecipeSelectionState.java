@@ -35,14 +35,8 @@ public final class RecipeSelectionState {
         this.craftTransactionOpen = false;
     }
 
-    /**
-     * Keeps a selected recipe alive across SlotCrafting's transient matrix
-     * mutations while one craft is consuming inputs and returning remainders.
-     */
+    /** Keeps selection alive while SlotCrafting temporarily mutates its matrix. */
     public void beginCraftTransaction() {
-        // SlotCrafting#onTake is not a nested transaction. Re-opening the
-        // window also recovers cleanly if a third-party override aborted the
-        // previous onTake before our RETURN hook could run.
         this.craftTransactionOpen = this.selectedRecipeId != null;
     }
 
@@ -59,7 +53,9 @@ public final class RecipeSelectionState {
         if (candidate == null
                 || CraftingRules.isRepairCombination(matrix)
                 || !RecipeProbe.matches(candidate, matrix, world)) {
-            clear();
+            if (!dev.sosea1.retropolymorph.config.PolymorphConfig.isRememberPlayerChoices()) {
+                clear();
+            }
         }
     }
 
@@ -97,15 +93,6 @@ public final class RecipeSelectionState {
             return candidate;
         }
 
-        // SlotCrafting mutates the matrix one slot at a time before placing
-        // crafting remainders. During that short transaction a perfectly valid
-        // selected recipe may temporarily stop matching. Preserve the id until
-        // the final post-remainder matrix can be validated.
-        if (this.craftTransactionOpen) {
-            return null;
-        }
-
-        clear();
         return null;
     }
 }

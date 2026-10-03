@@ -47,7 +47,7 @@ public final class ExternalCraftingSelectionProviders {
         // 1. Authoritative providers: evaluated first in registration order, can override existing matrix state
         for (ExternalCraftingSelectionProvider provider : PROVIDERS) {
             if (provider.getPrecedence() == ExternalCraftingSelectionProvider.Precedence.AUTHORITATIVE) {
-                ResourceLocation id = provider.getSelectedRecipeId(matrix, owner);
+                ResourceLocation id = provider.getSelectedRecipeId(matrix, owner, currentState);
                 if (id != null) {
                     return id;
                 }
@@ -62,7 +62,7 @@ public final class ExternalCraftingSelectionProviders {
         // 3. Fallback providers: evaluated in registration order only when no selection exists
         for (ExternalCraftingSelectionProvider provider : PROVIDERS) {
             if (provider.getPrecedence() == ExternalCraftingSelectionProvider.Precedence.FALLBACK_WHEN_EMPTY) {
-                ResourceLocation id = provider.getSelectedRecipeId(matrix, owner);
+                ResourceLocation id = provider.getSelectedRecipeId(matrix, owner, currentState);
                 if (id != null) {
                     return id;
                 }

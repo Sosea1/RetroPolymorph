@@ -357,6 +357,76 @@ public final class ConfigPolicyIntegrationTest {
         assertEquals(SelectionReason.MOD_PRIORITY, result.getReason());
     }
 
+    @Test
+    @DisplayName("C11 — rememberPlayerChoices=false disables persistent player NBT storage")
+    public void testCraftingC11_RememberPlayerChoicesDisabled() throws IOException {
+        File cfg = writeConfig("c11.cfg",
+                "policy {\n" +
+                "    B:rememberPlayerChoices=false\n" +
+                "}\n");
+        PolymorphConfig.load(cfg);
+        assertFalse(PolymorphConfig.isRememberPlayerChoices());
+        assertFalse(SelectionPersistencePolicy.PLAYER_PERSISTENT.supportsPlayerPreferences());
+
+        List<RecipeOption> options = createCraftingOptions();
+        SelectionContext ctx = createCraftingContext(options);
+
+        // Player selects a recipe in GUI
+        SelectionServiceResult selectResult = SelectionService.handle(
+                null,
+                this.playerData,
+                ctx,
+                SelectionCommand.select("enderio:priority_test"));
+
+        assertTrue(selectResult.isAccepted());
+        assertEquals("enderio:priority_test", selectResult.getSelectedRecipeKey());
+        assertEquals(SelectionReason.PLAYER_SELECTION, selectResult.getReason());
+
+        // Verify nothing was saved into player NBT
+        String fingerprint = ConflictFingerprint.create(options);
+        assertNull(PlayerRecipePreferences.lookup(this.playerData, fingerprint));
+
+        // When a new crafting session starts (new context), it defaults to native/policy, not remembered
+        SelectionContext newCtx = createCraftingContext(options);
+        SelectionServiceResult queryResult = handleQuery(newCtx, options);
+        assertEquals("thermalfoundation:priority_test", queryResult.getSelectedRecipeKey());
+        assertEquals(SelectionReason.AUTOMATIC_MODDED, queryResult.getReason());
+    }
+
+    @Test
+    @DisplayName("C12 — rememberPlayerChoices=true saves to player NBT and restores on query")
+    public void testCraftingC12_RememberPlayerChoicesEnabled() throws IOException {
+        File cfg = writeConfig("c12.cfg",
+                "policy {\n" +
+                "    B:rememberPlayerChoices=true\n" +
+                "}\n");
+        PolymorphConfig.load(cfg);
+        assertTrue(PolymorphConfig.isRememberPlayerChoices());
+        assertTrue(SelectionPersistencePolicy.PLAYER_PERSISTENT.supportsPlayerPreferences());
+
+        List<RecipeOption> options = createCraftingOptions();
+        SelectionContext ctx = createCraftingContext(options);
+
+        SelectionServiceResult selectResult = SelectionService.handle(
+                null,
+                this.playerData,
+                ctx,
+                SelectionCommand.select("enderio:priority_test"));
+
+        assertTrue(selectResult.isAccepted());
+        assertEquals("enderio:priority_test", selectResult.getSelectedRecipeKey());
+
+        // Verify it was saved to player NBT
+        String fingerprint = ConflictFingerprint.create(options);
+        assertEquals("enderio:priority_test", PlayerRecipePreferences.lookup(this.playerData, fingerprint));
+
+        // New context restores preference
+        SelectionContext newCtx = createCraftingContext(options);
+        SelectionServiceResult queryResult = handleQuery(newCtx, options);
+        assertEquals("enderio:priority_test", queryResult.getSelectedRecipeKey());
+        assertEquals(SelectionReason.PLAYER_PREFERENCE, queryResult.getReason());
+    }
+
     // =========================================================================
     // 3. Smelting Policy Matrix (S1 - S8)
     // =========================================================================

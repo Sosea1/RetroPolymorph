@@ -48,6 +48,7 @@ public final class RecipeSelectorController {
     private int inputRevision;
     private long appliedSelectionRevision;
     private long pendingResultSinceNanos;
+    private boolean remoteSelectionReady = true;
 
     RecipeSelectorController(
             GuiContainer gui,
@@ -152,8 +153,9 @@ public final class RecipeSelectorController {
         int windowId = this.context.getContainer().windowId;
         return ClientResultMask.shouldMask(
                 true,
-                hasInputs,
-                !ClientSelectionTracker.hasAuthoritativeSnapshotForWindow(windowId),
+                hasInputs || !this.remoteSelectionReady,
+                !ClientSelectionTracker.hasAuthoritativeSnapshotForWindow(windowId)
+                        || !this.remoteSelectionReady,
                 this.pendingResultSinceNanos,
                 System.nanoTime());
     }
@@ -204,6 +206,7 @@ public final class RecipeSelectorController {
 
         boolean inputsChanged = this.cache.refreshInputs(this.context);
         if (windowChanged || inputsChanged) {
+            this.remoteSelectionReady = true;
             this.pendingResultSinceNanos = System.nanoTime();
             this.inputRevision = nextInputRevision(this.inputRevision);
             ClientSelectionTracker.expectInputRevision(
@@ -229,7 +232,8 @@ public final class RecipeSelectorController {
         }
 
         long selectionRevision = ClientSelectionTracker.getRevision(windowId, this.sessionToken);
-        boolean authoritativeUpdate = selectionRevision != this.appliedSelectionRevision;
+        boolean hasSnapshot = ClientSelectionTracker.hasAuthoritativeSnapshotForWindow(windowId);
+        boolean authoritativeUpdate = hasSnapshot && selectionRevision != this.appliedSelectionRevision;
         if (authoritativeUpdate) {
             String selected = ClientSelectionTracker.getSelectedRecipeKey(
                     windowId, this.sessionToken);
@@ -255,6 +259,25 @@ public final class RecipeSelectorController {
                     selected,
                     Integer.valueOf(choices.size()),
                     Boolean.valueOf(choices.size() > 1));
+        }
+
+        if (hasSnapshot) {
+            String selected = ClientSelectionTracker.getSelectedRecipeKey(windowId, this.sessionToken);
+            Slot result = this.context.getResultSlot();
+            ItemStack before = LOGGER.isDebugEnabled() && result != null
+                    ? result.getStack().copy() : ItemStack.EMPTY;
+            boolean wasReady = this.remoteSelectionReady;
+            this.remoteSelectionReady = this.context.reconcileRemoteSelection(selected, mc.world);
+            if (wasReady && !this.remoteSelectionReady) {
+                this.pendingResultSinceNanos = System.nanoTime();
+            }
+            if (LOGGER.isDebugEnabled() && (wasReady != this.remoteSelectionReady
+                    || (result != null && !ItemStack.areItemStacksEqual(before, result.getStack())))) {
+                LOGGER.debug("Selector reconcile: container={}, session={}, window={}, inputRevision={}, selectionRevision={}, selected={}, ready={}, resultBefore={}, resultAfter={}",
+                        this.context.getContainer().getClass().getName(), this.sessionToken, windowId,
+                        this.inputRevision, selectionRevision, selected, this.remoteSelectionReady,
+                        before, result == null ? ItemStack.EMPTY : result.getStack());
+            }
         }
 
         ensureButtonAttached();

@@ -34,6 +34,12 @@ public final class Ae2CraftExecutionScope {
 
     public static void enter(EntityPlayer player) {
         Frame previous = CURRENT.get();
+        if (previous != null && (previous.isExpired() || previous.isStale(player))) {
+            LOGGER.warn("Detected stale AE2 craft execution scope frame on enter; resetting");
+            CURRENT.remove();
+            previous = null;
+        }
+
         ResourceLocation selected = null;
         Container container = null;
         UUID playerId = null;
@@ -55,7 +61,7 @@ public final class Ae2CraftExecutionScope {
             }
         }
 
-        CURRENT.set(new Frame(selected, playerId, container, previous));
+        CURRENT.set(new Frame(selected, playerId, container, player, previous));
         if (selected != null && LOGGED_CONTAINERS.add(containerClass)) {
             LOGGER.debug(
                     "AE2 crafting execution scope active: player={}, container={}, window={}, selected={}",
@@ -75,20 +81,56 @@ public final class Ae2CraftExecutionScope {
         CURRENT.set(current.previous);
     }
 
+    public static void resetIfLeaked() {
+        if (CURRENT.get() != null) {
+            LOGGER.warn("Clearing leaked AE2 craft execution scope at tick end");
+            CURRENT.remove();
+        }
+    }
+
+    public static void onContainerClosed(Container closedContainer) {
+        Frame current = CURRENT.get();
+        if (current != null && (closedContainer == null || current.container == closedContainer)) {
+            CURRENT.remove();
+        }
+    }
+
     public static boolean isActive() {
-        return CURRENT.get() != null;
+        Frame current = CURRENT.get();
+        if (current == null) {
+            return false;
+        }
+        if (current.isExpired() || current.isStale(null)) {
+            CURRENT.remove();
+            return false;
+        }
+        return true;
     }
 
     @Nullable
     public static ResourceLocation currentSelectedRecipeId() {
         Frame current = CURRENT.get();
-        return current == null ? null : current.selectedRecipeId;
+        if (current == null) {
+            return null;
+        }
+        if (current.isExpired() || current.isStale(null)) {
+            CURRENT.remove();
+            return null;
+        }
+        return current.selectedRecipeId;
     }
 
     @Nullable
     public static Container currentContainer() {
         Frame current = CURRENT.get();
-        return current == null ? null : current.container;
+        if (current == null) {
+            return null;
+        }
+        if (current.isExpired() || current.isStale(null)) {
+            CURRENT.remove();
+            return null;
+        }
+        return current.container;
     }
 
     /**
@@ -124,6 +166,9 @@ public final class Ae2CraftExecutionScope {
         @Nullable
         private final Container container;
         @Nullable
+        private final java.lang.ref.WeakReference<EntityPlayer> playerRef;
+        private final long startTimeNano;
+        @Nullable
         private final Frame previous;
         private ItemStack expectedOutput = ItemStack.EMPTY;
 
@@ -131,11 +176,34 @@ public final class Ae2CraftExecutionScope {
                 @Nullable ResourceLocation selectedRecipeId,
                 @Nullable UUID playerId,
                 @Nullable Container container,
+                @Nullable EntityPlayer player,
                 @Nullable Frame previous) {
             this.selectedRecipeId = selectedRecipeId;
             this.playerId = playerId;
             this.container = container;
+            this.playerRef = player == null ? null : new java.lang.ref.WeakReference<EntityPlayer>(player);
+            this.startTimeNano = System.nanoTime();
             this.previous = previous;
+        }
+
+        boolean isExpired() {
+            return (System.nanoTime() - this.startTimeNano) > 500_000_000L; // 500ms max lifetime
+        }
+
+        boolean isStale(@Nullable EntityPlayer newPlayer) {
+            if (isExpired()) {
+                return true;
+            }
+            if (newPlayer != null && this.playerId != null && !this.playerId.equals(newPlayer.getUniqueID())) {
+                return true;
+            }
+            if (this.playerRef != null && this.container != null) {
+                EntityPlayer p = this.playerRef.get();
+                if (p == null || p.isDead || p.openContainer != this.container) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

@@ -3,7 +3,6 @@ package com.sosea1.fastsuite112.api;
 import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.crafting.IRecipe;
 
-import java.util.Collections;
 
 /** Test-only representation of Retro FastSuite's released candidate API. */
 public final class FastSuiteAPI {
@@ -11,6 +10,8 @@ public final class FastSuiteAPI {
     }
 
     public static Iterable<IRecipe> getCandidateRecipes(InventoryCrafting inventory) {
-        return Collections.emptyList();
+        // A conservative candidate API may return the full registry. Returning
+        // an empty list would hide every recipe from all resolver integration tests.
+        return net.minecraft.item.crafting.CraftingManager.REGISTRY;
     }
 }

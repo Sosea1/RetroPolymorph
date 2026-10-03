@@ -15,17 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Failure-isolated recipe operations used both during candidate discovery and
- * within CraftingManager resolution.
- *
- * <p>Third-party 1.12.2 recipes occasionally assume a very specific container,
- * player, or world state and can throw from {@link IRecipe#matches},
- * {@link IRecipe#getCraftingResult}, or {@link IRecipe#getRemainingItems}. A broken
- * candidate must not take down the server thread or cause item duplication.
- * Failing probes are safely caught, logged once per recipe class, and fallen
- * back to safe defaults.</p>
- */
+/** Isolates broken third-party recipe calls from matching and crafting hot paths. */
 public final class RecipeProbe {
 
     private static final Logger LOGGER = LogManager.getLogger("Retro Polymorph");

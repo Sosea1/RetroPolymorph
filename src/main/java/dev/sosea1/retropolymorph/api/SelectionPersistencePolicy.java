@@ -38,7 +38,8 @@ public final class SelectionPersistencePolicy {
     }
 
     public boolean supportsPlayerPreferences() {
-        return this.supportsPlayerPreferences;
+        return this.supportsPlayerPreferences
+                && dev.sosea1.retropolymorph.config.PolymorphConfig.isRememberPlayerChoices();
     }
 
     public boolean playerPreferenceOverridesCurrent() {

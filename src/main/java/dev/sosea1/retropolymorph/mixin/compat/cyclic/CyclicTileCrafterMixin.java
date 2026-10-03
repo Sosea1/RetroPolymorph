@@ -71,6 +71,14 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
         this.retropolymorph$selectedRecipeId = recipeId;
         this.recipe = null;
         this.lastInvHash = -1;
+        this.retropolymorph$lastResolvedTemplate = null;
+        if (this.crafter != null) {
+            if (recipeId != null) {
+                RecipeSelectionSeeder.seed(this.crafter, recipeId);
+            } else {
+                RecipeSelectionSeeder.clear(this.crafter);
+            }
+        }
         try {
             findRecipe();
         } catch (RuntimeException | LinkageError t) {
@@ -118,6 +126,11 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
         }
         NBTTagCompound target = cir.getReturnValue() == null ? tag : cir.getReturnValue();
         if (target == null) {
+            return;
+        }
+        if (!PolymorphConfig.isRememberPlayerChoices()) {
+            target.removeTag(RETROPOLYMORPH_RECIPE_TAG);
+            target.removeTag("RetroPolymorphTemplates");
             return;
         }
         // The tile may be idle after its template changed, so this cache field
@@ -168,9 +181,14 @@ public abstract class CyclicTileCrafterMixin implements CyclicSelectionAccess {
             return;
         }
         ItemStack[] template = retropolymorph$currentTemplate();
-        if (retropolymorph$sameTemplate(this.retropolymorph$lastResolvedTemplate, template)) {
+        ResourceLocation currentSelected =
+                this.retropolymorph$templateSelections.lookup(template);
+        if (this.recipe != null
+                && retropolymorph$sameTemplate(this.retropolymorph$lastResolvedTemplate, template)
+                && java.util.Objects.equals(this.retropolymorph$selectedRecipeId, currentSelected)) {
             return;
         }
+        this.lastInvHash = -1;
         findRecipe();
     }
 

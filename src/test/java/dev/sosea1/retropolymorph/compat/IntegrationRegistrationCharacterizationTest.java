@@ -42,13 +42,13 @@ class IntegrationRegistrationCharacterizationTest {
         // Priority 1190: Engineer's Decor guard
         // Priority 1100: Retro Sophisticated Backpacks
         // Priority 1090: Extra Utilities 2
-        // Priority 1000: EnderIO, Thaumcraft
+        // Priority 1000: EnderIO, Thaumcraft, Avaritia, Artisan Worktables
         // Priority 950: Mekanism
         // Priority 940: Thermal
         // Priority 900: Refined Storage (crafting, pattern)
         // Priority 800: AE2 (pattern, crafting), Extended Crafting (table, ender crafter),
         //               IC2 (industrial wb, batch crafter), Cyclic (wb, crafter),
-        //               RFTools (crafter, wb), Tinkers (crafting station), Forestry guard
+        //               RFTools (crafter, wb), GregTech, Tinkers (crafting station), Forestry guard
         List<String> expected = new ArrayList<String>();
         expected.add("retropolymorph:immersive_engineering_mod_workbench_native_selector@1200");
         expected.add("retropolymorph:engineers_decor_native_selector@1190");
@@ -56,6 +56,8 @@ class IntegrationRegistrationCharacterizationTest {
         expected.add("retropolymorph:extrautils2_crafters@1090");
         expected.add("retropolymorph:enderio_crafter@1000");
         expected.add("retropolymorph:thaumcraft_arcane_workbench@1000");
+        expected.add("retropolymorph:avaritia_extreme_crafting@1000");
+        expected.add("retropolymorph:artisan_worktable@1000");
         expected.add("retropolymorph:mekanism_formulaic_assemblicator@950");
         expected.add("retropolymorph:thermal_sequential_fabricator@940");
         expected.add("retropolymorph:refinedstorage_crafting_grid@900");
@@ -70,6 +72,7 @@ class IntegrationRegistrationCharacterizationTest {
         expected.add("retropolymorph:cyclic_crafter@800");
         expected.add("retropolymorph:rftools_crafter@800");
         expected.add("retropolymorph:rftools_workbench@800");
+        expected.add("retropolymorph:gregtech_workbench@800");
         expected.add("retropolymorph:tconstruct_crafting_station@800");
         expected.add("retropolymorph:forestry_worktable_guard@800");
 

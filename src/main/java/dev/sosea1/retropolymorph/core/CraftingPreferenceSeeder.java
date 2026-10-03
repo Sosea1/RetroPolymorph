@@ -143,7 +143,6 @@ public final class CraftingPreferenceSeeder {
                 markProvisional(context, preferred);
                 return;
             }
-            PlayerRecipePreferences.forgetInput(playerData, key);
         }
     }
 
@@ -187,9 +186,6 @@ public final class CraftingPreferenceSeeder {
                 markProvisional(context, preferred);
                 return;
             }
-            // Input aliases are only accelerators. Invalid aliases are dropped
-            // independently so a broader shapeless alias can still be tried.
-            PlayerRecipePreferences.forgetInput(player.getEntityData(), key);
         }
     }
 
@@ -226,10 +222,13 @@ public final class CraftingPreferenceSeeder {
             }
 
             IRecipe preferredRecipe = ForgeRegistries.RECIPES.getValue(preferredId);
-            if (preferredRecipe != null && RecipeProbe.matches(preferredRecipe, matrix, world)) {
+            if (preferredRecipe == null) {
+                PlayerRecipePreferences.forgetInput(playerData, key);
+                continue;
+            }
+            if (RecipeProbe.matches(preferredRecipe, matrix, world)) {
                 return preferredId;
             }
-            PlayerRecipePreferences.forgetInput(playerData, key);
         }
         return null;
     }

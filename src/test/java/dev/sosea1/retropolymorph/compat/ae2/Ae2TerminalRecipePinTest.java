@@ -75,6 +75,7 @@ public final class Ae2TerminalRecipePinTest {
         RecipeProbe.resetDiagnostics();
         recipeA.setShouldMatch(true);
         recipeB.setShouldMatch(true);
+        recipeB.minimumOccupiedSlots = 0;
     }
 
     @AfterEach
@@ -247,6 +248,224 @@ public final class Ae2TerminalRecipePinTest {
                 "Native recipe output count must be restored!");
     }
 
+    @Test
+    public void testApplyRemoteSelectionRefreshesResultSlotAndContainer() {
+        MockAe2Container container = new MockAe2Container();
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem, 1, 0));
+
+        DummyWorld world = createDummyWorld();
+        NBTTagCompound playerData = new NBTTagCompound();
+        EntityPlayerMP player = createMockPlayer(world, playerData);
+        container.setPlayer(player);
+
+        Ae2CraftingTermAdapter adapter = Ae2CraftingTermAdapter.INSTANCE;
+        dev.sosea1.retropolymorph.api.RecipeSelectionContext context =
+                (dev.sosea1.retropolymorph.api.RecipeSelectionContext) adapter.probe(container).getContext();
+        assertNotNull(context);
+
+        // Initially on client or unselected, default recipe output is present (e.g. Recipe A, count 1)
+        container.getResultSlot().putStack(recipeA.getCraftingResult(null));
+        assertEquals(1, container.getResultSlot().getStack().getCount());
+
+        // When authoritative server selection arrives, applyRemoteSelection is called with recipe B
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+
+        // Both selection state and visible result slot must be immediately updated to Recipe B (count 2)
+        assertEquals(ID_RECIPE_B, container.retropolymorph$getAe2SelectedRecipeId());
+        assertEquals(recipeB, container.retropolymorph$getAe2CurrentRecipe());
+        assertEquals(2, container.getResultSlot().getStack().getCount(),
+                "Output slot must reflect remote selection immediately!");
+    }
+
+    @Test
+    public void testAe2ScopeDoesNotHijackUnrelatedContainer() {
+        MockAe2Container ae2Container = new MockAe2Container();
+        Ae2SelectionStore.set(ae2Container, ID_RECIPE_B);
+
+        Container unrelatedContainer = new Container() {
+            @Override public boolean canInteractWith(EntityPlayer playerIn) { return true; }
+        };
+        InventoryCrafting workbenchMatrix = new InventoryCrafting(unrelatedContainer, 3, 3);
+
+        Ae2MatrixChangeScope.enter(ae2Container);
+        try {
+            // Unrelated container owner MUST NOT be hijacked even when Ae2MatrixChangeScope is active!
+            assertNull(Ae2ExternalCraftingSelectionProvider.INSTANCE.getSelectedRecipeId(workbenchMatrix, unrelatedContainer));
+        } finally {
+            Ae2MatrixChangeScope.exit();
+        }
+    }
+
+    @Test
+    public void testAe2ScopeDoesNotOverridePreexistingMachineState() {
+        MockAe2Container ae2Container = new MockAe2Container();
+        Ae2SelectionStore.set(ae2Container, ID_RECIPE_B);
+
+        // Simulate an auto crafter matrix with null container owner, but an existing selected recipe
+        InventoryCrafting autoCrafterMatrix = new InventoryCrafting(null, 3, 3);
+        dev.sosea1.retropolymorph.core.RecipeSelectionState state = new dev.sosea1.retropolymorph.core.RecipeSelectionState();
+        state.select(ID_RECIPE_A);
+
+        Ae2MatrixChangeScope.enter(ae2Container);
+        try {
+            assertNull(Ae2ExternalCraftingSelectionProvider.INSTANCE.getSelectedRecipeId(autoCrafterMatrix, null, state));
+        } finally {
+            Ae2MatrixChangeScope.exit();
+        }
+    }
+
+    @Test
+    public void testAe2CraftExecutionScopeResetAndStaleCheck() {
+        DummyWorld world = createDummyWorld();
+        NBTTagCompound playerData = new NBTTagCompound();
+        EntityPlayerMP player = createMockPlayer(world, playerData);
+        MockAe2Container container = new MockAe2Container();
+        player.openContainer = container;
+        Ae2SelectionStore.set(container, ID_RECIPE_B);
+
+        Ae2CraftExecutionScope.enter(player);
+        assertTrue(Ae2CraftExecutionScope.isActive());
+        assertEquals(ID_RECIPE_B, Ae2CraftExecutionScope.currentSelectedRecipeId());
+
+        // Stale container check: player opened a different container
+        Container other = new Container() {
+            @Override public boolean canInteractWith(EntityPlayer p) { return true; }
+        };
+        player.openContainer = other;
+        assertFalse(Ae2CraftExecutionScope.isActive(), "Scope must invalidate when player container changes");
+        assertNull(Ae2CraftExecutionScope.currentSelectedRecipeId());
+
+        // Re-enter and test resetIfLeaked
+        player.openContainer = container;
+        Ae2CraftExecutionScope.enter(player);
+        assertTrue(Ae2CraftExecutionScope.isActive());
+        Ae2CraftExecutionScope.resetIfLeaked();
+        assertFalse(Ae2CraftExecutionScope.isActive(), "resetIfLeaked must clear active frame");
+    }
+
+    @Test
+    public void testOutputOnlyPacketIsReconciledWithoutAnotherSelectionReply() {
+        MockAe2Container container = new MockAe2Container();
+        DummyWorld world = createDummyWorld();
+        container.setPlayer(createMockPlayer(world, new NBTTagCompound()));
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem));
+        dev.sosea1.retropolymorph.api.SelectionContext context =
+                Ae2CraftingTermAdapter.INSTANCE.probe(container).getContext();
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+
+        // ME sends its native result after the Polymorph reply; inputs stay the same.
+        container.getResultSlot().putStack(new ItemStack(testItem, 1, 100));
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(200, container.getResultSlot().getStack().getMetadata());
+        assertEquals(2, container.getResultSlot().getStack().getCount());
+
+        // A correct result must not repeatedly call the third-party recipe.
+        int probes = recipeB.matchCalls;
+        for (int i = 0; i < 20; i++) {
+            assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        }
+        assertEquals(probes, recipeB.matchCalls);
+    }
+
+    @Test
+    public void testRemoteSelectionWaitsForGridInsteadOfClearingIt() {
+        MockAe2Container container = new MockAe2Container();
+        DummyWorld world = createDummyWorld();
+        container.setPlayer(createMockPlayer(world, new NBTTagCompound()));
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem));
+        dev.sosea1.retropolymorph.api.SelectionContext context =
+                Ae2CraftingTermAdapter.INSTANCE.probe(container).getContext();
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+
+        recipeB.setShouldMatch(false);
+        container.getMatrixSlot(0).putStack(ItemStack.EMPTY);
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+        assertEquals(ID_RECIPE_B.toString(), context.getSelectedRecipeKey(),
+                "An incomplete client grid must not discard the server choice");
+        assertFalse(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+
+        recipeB.setShouldMatch(true);
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem));
+        container.getResultSlot().putStack(new ItemStack(testItem, 1, 100));
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(200, container.getResultSlot().getStack().getMetadata());
+
+        context.applyRemoteSelection(null);
+        assertTrue(context.reconcileRemoteSelection(null, world));
+        assertNull(context.getSelectedRecipeKey());
+        assertEquals(100, container.getResultSlot().getStack().getMetadata(),
+                "Clear-to-auto must not restore the previously selected recipe");
+    }
+
+    @Test
+    public void testFirstReplyWaitsForPartialGridAndSurvivesNativeSelectionReset() {
+        MockAe2Container container = new MockAe2Container();
+        DummyWorld world = createDummyWorld();
+        container.setPlayer(createMockPlayer(world, new NBTTagCompound()));
+        recipeB.minimumOccupiedSlots = 2;
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem));
+        container.getResultSlot().putStack(new ItemStack(testItem, 1, 100));
+        dev.sosea1.retropolymorph.api.SelectionContext context =
+                Ae2CraftingTermAdapter.INSTANCE.probe(container).getContext();
+
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+        assertEquals(ID_RECIPE_B.toString(), context.getSelectedRecipeKey());
+        assertFalse(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(100, container.getResultSlot().getStack().getMetadata(),
+                "Do not fabricate selected output on a grid that does not match");
+        assertNull(Ae2SelectionStore.get(container));
+
+        container.getMatrixSlot(1).putStack(new ItemStack(testItem));
+        Ae2SelectionStore.clear(container);
+        container.retropolymorph$setAe2SelectedRecipeId(null);
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(ID_RECIPE_B, Ae2SelectionStore.get(container));
+        assertEquals(recipeB, container.retropolymorph$getAe2CurrentRecipe());
+        assertEquals(200, container.getResultSlot().getStack().getMetadata());
+    }
+
+    @Test
+    public void testReconciliationDetectsInPlaceCountAndNbtChanges() {
+        MockAe2Container container = new MockAe2Container();
+        DummyWorld world = createDummyWorld();
+        container.setPlayer(createMockPlayer(world, new NBTTagCompound()));
+        ItemStack input = new ItemStack(testItem, 2);
+        container.getMatrixSlot(0).putStack(input);
+        dev.sosea1.retropolymorph.api.SelectionContext context =
+                Ae2CraftingTermAdapter.INSTANCE.probe(container).getContext();
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+        int probes = recipeB.matchCalls;
+
+        input.setCount(1);
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(++probes, recipeB.matchCalls);
+        input.setTagCompound(new NBTTagCompound());
+        input.getTagCompound().setString("variant", "changed");
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(++probes, recipeB.matchCalls);
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(probes, recipeB.matchCalls);
+    }
+
+    @Test
+    public void testNativeRecipeCacheIsReconciledWithoutExtensionOrOutputChange() {
+        MockAe2Container container = new MockAe2Container();
+        DummyWorld world = createDummyWorld();
+        container.setPlayer(createMockPlayer(world, new NBTTagCompound()));
+        container.getMatrixSlot(0).putStack(new ItemStack(testItem));
+        // Topology-compatible terminals need not implement our extension.
+        Ae2CraftingTermContext context = new Ae2CraftingTermContext(
+                container, null, container.matrixSlots, container.resultSlot, false);
+        context.applyRemoteSelection(ID_RECIPE_B.toString());
+        int probes = recipeB.matchCalls;
+        container.currentRecipe = recipeA;
+
+        assertTrue(context.reconcileRemoteSelection(ID_RECIPE_B.toString(), world));
+        assertEquals(recipeB, container.currentRecipe);
+        assertEquals(200, container.resultSlot.getStack().getMetadata());
+        assertEquals(probes, recipeB.matchCalls);
+    }
+
     // --- Mock Classes & Helpers ---
 
     private static DummyWorld createDummyWorld() {
@@ -309,6 +528,8 @@ public final class Ae2TerminalRecipePinTest {
         private final ResourceLocation id;
         private final ItemStack output;
         private boolean shouldMatch = true;
+        private int matchCalls;
+        private int minimumOccupiedSlots;
 
         TestRecipe(ResourceLocation id, ItemStack output) {
             this.id = id;
@@ -321,7 +542,16 @@ public final class Ae2TerminalRecipePinTest {
 
         @Override
         public boolean matches(InventoryCrafting inv, World worldIn) {
-            return this.shouldMatch;
+            this.matchCalls++;
+            int occupied = 0;
+            if (inv != null) {
+                for (int i = 0; i < inv.getSizeInventory(); i++) {
+                    if (!inv.getStackInSlot(i).isEmpty()) {
+                        occupied++;
+                    }
+                }
+            }
+            return this.shouldMatch && occupied >= this.minimumOccupiedSlots;
         }
 
         @Override

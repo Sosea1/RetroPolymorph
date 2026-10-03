@@ -61,6 +61,16 @@ public interface SelectionContext {
     }
 
     /**
+     * Reconciles a current client snapshot after native slot updates. Returns
+     * false while the selected recipe cannot yet be applied to the client grid.
+     * Called only for the current authoritative input revision; must be cheap
+     * when nothing changed and must not send selection packets.
+     */
+    default boolean reconcileRemoteSelection(@Nullable String recipeKey, World world) {
+        return true;
+    }
+
+    /**
      * Chooses the default-selection policy for this context. Recipe-backed
      * crafting and machine integrations use RECIPE by default; legacy furnace
      * contexts opt into the separate SMELTING policy.
@@ -84,4 +94,3 @@ public interface SelectionContext {
         return SelectionScope.local();
     }
 }
-

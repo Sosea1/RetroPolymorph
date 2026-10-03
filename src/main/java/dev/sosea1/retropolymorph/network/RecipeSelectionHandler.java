@@ -163,6 +163,21 @@ public final class RecipeSelectionHandler
         SharedSelectionViewerRegistry.unregister(playerId, windowId);
     }
 
+    /** Pushes a server-side native UI choice using the viewer's existing selector session. */
+    public static void syncExternalSelection(EntityPlayerMP player, SelectionContext context,
+            SelectionServiceResult result) {
+        if (player == null || context == null || result == null || !result.isAccepted()
+                || player.openContainer != context.getContainer()) {
+            return;
+        }
+        RecipeSelectionSessionTracker.Session session = SESSIONS.get(
+                player.getUniqueID(), context.getContainer().windowId);
+        if (session != null) {
+            syncSelection(player, session.windowId, session.sessionToken, session.inputRevision,
+                    true, result.getSelectedRecipeKey(), result.getOptions(), result.getReason());
+        }
+    }
+
     static RecipeSelectionSessionTracker.Session getSession(UUID playerId, int windowId) {
         return SESSIONS.get(playerId, windowId);
     }

@@ -107,16 +107,33 @@ public abstract class CraftingManagerMixin {
         RecipeSelectionState state = extension.retropolymorph$peekRecipeSelectionState();
         Container owner = extension.retropolymorph$getCraftingOwner();
 
+        if (state != null && retropolymorph$isMatrixEmpty(matrix)) {
+            if (ExternalCraftingSelectionProviders.shouldClearStateOnEmpty(matrix, owner)) {
+                state.clear();
+                return state;
+            }
+        }
+
         ResourceLocation selected = ExternalCraftingSelectionProviders.getSelectedRecipeId(matrix, owner, state);
 
         if (selected == null) {
-            if (state != null && ExternalCraftingSelectionProviders.shouldClearStateOnEmpty(matrix, owner)) {
-                state.clear();
-            }
             return state;
         }
 
         return retropolymorph$seedSelection(extension, state, selected);
+    }
+
+    @Unique
+    private static boolean retropolymorph$isMatrixEmpty(@Nullable InventoryCrafting matrix) {
+        if (matrix == null) {
+            return true;
+        }
+        for (int i = 0; i < matrix.getSizeInventory(); i++) {
+            if (!matrix.getStackInSlot(i).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Unique

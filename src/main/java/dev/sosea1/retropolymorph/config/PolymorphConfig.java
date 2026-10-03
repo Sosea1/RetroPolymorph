@@ -11,16 +11,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * User configuration surface. Core matching/caching remains deterministic;
- * selector values affect client UX while integration toggles allow a broken or
- * unwanted focused adapter to be disabled without removing the whole mod.
- */
+/** User-facing selector, policy and integration configuration. */
 public final class PolymorphConfig {
 
     private static List<String> preferredMods = Collections.emptyList();
     private static List<String> preferredRecipes = Collections.emptyList();
     private static boolean preferModdedOverVanilla = true;
+    private static boolean rememberPlayerChoices = true;
 
     private static List<String> preferredSmeltingMods = Collections.emptyList();
     private static List<String> preferredSmeltingOutputs = Collections.emptyList();
@@ -46,6 +43,9 @@ public final class PolymorphConfig {
     private static boolean integrationIc2 = true;
     private static boolean integrationCyclic = true;
     private static boolean integrationRftools = true;
+    private static boolean integrationGregTech = true;
+    private static boolean integrationAvaritia = true;
+    private static boolean integrationArtisanWorktables = true;
     private static boolean integrationTinkers = true;
     private static boolean integrationEnderIo = true;
     private static boolean integrationThaumcraft = true;
@@ -154,6 +154,13 @@ public final class PolymorphConfig {
         integrationIc2 = integration(config, "ic2", true, "IndustrialCraft 2 crafting machines.");
         integrationCyclic = integration(config, "cyclic", true, "Cyclic persistent workbench.");
         integrationRftools = integration(config, "rftools", true, "RFTools/RFTools Control crafting surfaces.");
+        integrationGregTech = integration(config, "gregTech", true, "GregTech CE / CEu Workbench.");
+        integrationAvaritia = integration(config, "avaritia", true, "Avaritia Extreme Crafting Table.");
+        integrationArtisanWorktables = integration(
+                config,
+                "artisanWorktables",
+                true,
+                "Artisan Worktables custom recipes and vanilla crafting fallback.");
         integrationTinkers = integration(config, "tconstruct", true, "Tinkers' Construct Crafting Station.");
         integrationEnderIo = integration(config, "enderio", true, "Ender IO Crafter ghost recipe and automatic craft path.");
         integrationThaumcraft = integration(config, "thaumcraft", true, "Thaumcraft 6 Arcane Workbench recipe selection.");
@@ -182,6 +189,14 @@ public final class PolymorphConfig {
                 true,
                 "When no player choice or explicit policy matches, prefer the first modded recipe when the native default is vanilla.\n"
                         + "Set false to preserve the native Forge/machine recipe order.");
+
+        rememberPlayerChoices = config.getBoolean(
+                "rememberPlayerChoices",
+                CATEGORY_POLICY,
+                true,
+                "Remember player recipe choices across crafting sessions in player NBT.\n"
+                        + "When set to false, selections are session-only (like RetroPolymorph Legacy),\n"
+                        + "resetting when closing the GUI or changing inputs without persistent storage.");
 
         String[] rawPreferredMods = config.getStringList(
                 "preferredMods",
@@ -281,6 +296,9 @@ public final class PolymorphConfig {
     public static boolean isIntegrationIc2Enabled() { return integrationIc2; }
     public static boolean isIntegrationCyclicEnabled() { return integrationCyclic; }
     public static boolean isIntegrationRftoolsEnabled() { return integrationRftools; }
+    public static boolean isIntegrationGregTechEnabled() { return integrationGregTech; }
+    public static boolean isIntegrationAvaritiaEnabled() { return integrationAvaritia; }
+    public static boolean isIntegrationArtisanWorktablesEnabled() { return integrationArtisanWorktables; }
     public static boolean isIntegrationTinkersEnabled() { return integrationTinkers; }
     public static boolean isIntegrationEnderIoEnabled() { return integrationEnderIo; }
     public static boolean isIntegrationThaumcraftEnabled() { return integrationThaumcraft; }
@@ -301,6 +319,14 @@ public final class PolymorphConfig {
 
     public static boolean isPreferModdedOverVanilla() {
         return preferModdedOverVanilla;
+    }
+
+    public static boolean isRememberPlayerChoices() {
+        return rememberPlayerChoices;
+    }
+
+    public static void setRememberPlayerChoicesForTests(boolean enabled) {
+        rememberPlayerChoices = enabled;
     }
 
     public static List<String> getPreferredSmeltingMods() {

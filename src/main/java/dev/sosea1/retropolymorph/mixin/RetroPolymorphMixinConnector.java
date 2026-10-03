@@ -4,13 +4,7 @@ import org.spongepowered.asm.mixin.Mixins;
 import org.spongepowered.asm.mixin.connect.IMixinConnector;
 import zone.rong.mixinbooter.service.ModDiscoverer;
 
-/**
- * Registers optional compatibility mixins only when their target mod is present.
- *
- * <p>Retro Sophisticated Backpacks is intentionally absent: its crafting upgrade
- * uses the common CraftingManager mixin plus an external-selection provider, so
- * it does not need an RSB-specific mixin configuration.</p>
- */
+/** Registers optional compatibility mixins only when their target mod is present. */
 public final class RetroPolymorphMixinConnector implements IMixinConnector {
 
     private static final String AE2_MOD_ID = "appliedenergistics2";
@@ -61,46 +55,37 @@ public final class RetroPolymorphMixinConnector implements IMixinConnector {
     private static final String TCONSTRUCT_MIXIN_CONFIG =
             "mixins.retropolymorph.tconstruct.json";
 
+    private static final String AVARITIA_MOD_ID = "avaritia";
+    private static final String AVARITIA_MIXIN_CONFIG =
+            "mixins.retropolymorph.avaritia.json";
+
+    private static final String ARTISAN_WORKTABLES_MOD_ID = "artisanworktables";
+    private static final String ARTISAN_WORKTABLES_MIXIN_CONFIG =
+            "mixins.retropolymorph.artisanworktables.json";
+
     @Override
     public void connect() {
-        if (ModDiscoverer.isModPresent(AE2_MOD_ID)) {
-            Mixins.addConfiguration(AE2_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(EXTENDED_CRAFTING_MOD_ID)) {
-            Mixins.addConfiguration(EXTENDED_CRAFTING_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(JEI_MOD_ID)) {
-            Mixins.addConfiguration(JEI_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(IC2_MOD_ID)) {
-            Mixins.addConfiguration(IC2_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(CYCLIC_MOD_ID)) {
-            Mixins.addConfiguration(CYCLIC_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(RFTOOLS_CONTROL_MOD_ID)) {
-            Mixins.addConfiguration(RFTOOLS_CONTROL_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(ENDER_IO_MOD_ID)) {
-            Mixins.addConfiguration(ENDER_IO_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(THAUMCRAFT_MOD_ID)) {
-            Mixins.addConfiguration(THAUMCRAFT_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(REFINED_STORAGE_MOD_ID)) {
-            Mixins.addConfiguration(REFINED_STORAGE_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(MEKANISM_MOD_ID)) {
-            Mixins.addConfiguration(MEKANISM_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(THERMAL_EXPANSION_MOD_ID)) {
-            Mixins.addConfiguration(THERMAL_EXPANSION_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(EXTRA_UTILITIES_2_MOD_ID)) {
-            Mixins.addConfiguration(EXTRA_UTILITIES_2_MIXIN_CONFIG);
-        }
-        if (ModDiscoverer.isModPresent(TCONSTRUCT_MOD_ID)) {
-            Mixins.addConfiguration(TCONSTRUCT_MIXIN_CONFIG);
+        addIfPresent(AE2_MOD_ID, AE2_MIXIN_CONFIG);
+        addIfPresent(EXTENDED_CRAFTING_MOD_ID, EXTENDED_CRAFTING_MIXIN_CONFIG);
+        addIfPresent(JEI_MOD_ID, JEI_MIXIN_CONFIG);
+        addIfPresent(IC2_MOD_ID, IC2_MIXIN_CONFIG);
+        addIfPresent(CYCLIC_MOD_ID, CYCLIC_MIXIN_CONFIG);
+        addIfPresent(RFTOOLS_CONTROL_MOD_ID, RFTOOLS_CONTROL_MIXIN_CONFIG);
+        addIfPresent(ENDER_IO_MOD_ID, ENDER_IO_MIXIN_CONFIG);
+        addIfPresent(THAUMCRAFT_MOD_ID, THAUMCRAFT_MIXIN_CONFIG);
+        addIfPresent(REFINED_STORAGE_MOD_ID, REFINED_STORAGE_MIXIN_CONFIG);
+        addIfPresent(MEKANISM_MOD_ID, MEKANISM_MIXIN_CONFIG);
+        addIfPresent(THERMAL_EXPANSION_MOD_ID, THERMAL_EXPANSION_MIXIN_CONFIG);
+        addIfPresent(EXTRA_UTILITIES_2_MOD_ID, EXTRA_UTILITIES_2_MIXIN_CONFIG);
+        addIfPresent(TCONSTRUCT_MOD_ID, TCONSTRUCT_MIXIN_CONFIG);
+        addIfPresent(AVARITIA_MOD_ID, AVARITIA_MIXIN_CONFIG);
+        addIfPresent(ARTISAN_WORKTABLES_MOD_ID, ARTISAN_WORKTABLES_MIXIN_CONFIG);
+        addIfPresent("gregtech", "mixins.retropolymorph.gregtech.json");
+    }
+
+    private static void addIfPresent(String modId, String config) {
+        if (ModDiscoverer.isModPresent(modId)) {
+            Mixins.addConfiguration(config);
         }
     }
 }

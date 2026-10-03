@@ -77,29 +77,88 @@ public final class Ae2TerminalRecipePin {
      * so {@code slot.inventory instanceof InventoryPlayer} is always false there.
      * The generic slot-scan remains as a fallback for vanilla/other containers.</p>
      */
+    private static final java.lang.reflect.Field LISTENERS_FIELD;
+    static {
+        java.lang.reflect.Field field = null;
+        try {
+            field = net.minecraftforge.fml.relauncher.ReflectionHelper.findField(
+                    Container.class, "listeners", "field_75149_d");
+            field.setAccessible(true);
+        } catch (Throwable ignored) {
+        }
+        LISTENERS_FIELD = field;
+    }
+
     @Nullable
     public static EntityPlayer resolvePlayer(Container container) {
         if (container == null) {
             return null;
         }
-        // getPlayerInv() belongs to AEBaseContainer, not the terminal subclass.
-        // A subclass-targeted Mixin @Shadow fails to apply on older AE2 builds.
-        try {
-            Method getter = container.getClass().getMethod("getPlayerInv");
-            Object inventory = getter.invoke(container);
-            if (inventory instanceof InventoryPlayer) {
-                return ((InventoryPlayer) inventory).player;
+        // 1. Check container.listeners (on server side, viewing player is always in listeners)
+        if (LISTENERS_FIELD != null) {
+            try {
+                Object list = LISTENERS_FIELD.get(container);
+                if (list instanceof List) {
+                    for (Object listener : (List<?>) list) {
+                        if (listener instanceof EntityPlayer) {
+                            return (EntityPlayer) listener;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
             }
-        } catch (ReflectiveOperationException | SecurityException | LinkageError ignored) {
-            // Non-AE2 container: keep the generic slot fallback below.
         }
-        // Generic fallback for vanilla and other containers
+        // 2. getPlayerInv(), getInventoryPlayer(), or getPlayer() traversing class hierarchy (AEBaseContainer)
+        Class<?> clazz = container.getClass();
+        while (clazz != null && clazz != Object.class && clazz != Container.class) {
+            for (String methodName : new String[]{"getPlayerInv", "getInventoryPlayer", "getPlayer"}) {
+                try {
+                    Method getter = clazz.getDeclaredMethod(methodName);
+                    getter.setAccessible(true);
+                    Object res = getter.invoke(container);
+                    if (res instanceof InventoryPlayer) {
+                        return ((InventoryPlayer) res).player;
+                    } else if (res instanceof EntityPlayer) {
+                        return (EntityPlayer) res;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            clazz = clazz.getSuperclass();
+        }
+        // 3. Generic slot fallback
         for (Slot slot : container.inventorySlots) {
-            if (slot != null && slot.inventory instanceof net.minecraft.entity.player.InventoryPlayer) {
-                return ((net.minecraft.entity.player.InventoryPlayer) slot.inventory).player;
+            if (slot != null && slot.inventory instanceof InventoryPlayer) {
+                return ((InventoryPlayer) slot.inventory).player;
+            }
+        }
+        // 4. Client-side fallback if container is currently open
+        if (net.minecraftforge.fml.common.FMLCommonHandler.instance().getSide().isClient()) {
+            EntityPlayer clientPlayer = ClientResolver.getClientPlayer(container);
+            if (clientPlayer != null) {
+                return clientPlayer;
             }
         }
         return null;
+    }
+
+    private static final class ClientResolver {
+        @Nullable
+        static EntityPlayer getClientPlayer(Container container) {
+            try {
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+                if (mc != null && mc.player != null) {
+                    if (container == null
+                            || mc.player.openContainer == container
+                            || mc.player.inventoryContainer == container
+                            || mc.currentScreen != null) {
+                        return mc.player;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            return null;
+        }
     }
 
     /**
@@ -257,17 +316,15 @@ public final class Ae2TerminalRecipePin {
             if (container instanceof Ae2CraftingTermExtension) {
                 IRecipe current = ((Ae2CraftingTermExtension) container).retropolymorph$getAe2CurrentRecipe();
                 // If currentRecipe is still set without a selection, validate it and clear the
-                // ghost slot if it no longer matches (e.g. ingredient was removed).
+                // ghost slot only if world is known and recipe no longer matches.
                 if (current != null) {
                     World world = resolveWorld(container);
-                    if (world == null || !RecipeProbe.matches(current, matrix, world)) {
+                    if (world != null && !RecipeProbe.matches(current, matrix, world)) {
                         ((Ae2CraftingTermExtension) container).retropolymorph$setAe2CurrentRecipe(null);
                         if (!result.getStack().isEmpty()) {
                             result.putStack(ItemStack.EMPTY);
                         }
                     }
-                } else if (!result.getStack().isEmpty()) {
-                    result.putStack(ItemStack.EMPTY);
                 }
             }
             return false;

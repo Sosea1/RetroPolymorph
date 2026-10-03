@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.inventory.Slot;
 import net.minecraft.inventory.SlotFurnaceOutput;
 import net.minecraft.tileentity.TileEntityFurnace;
@@ -181,6 +182,15 @@ public final class ClientGuiEvents {
             return;
         }
 
+        // Legacy GregTech renders its own widgets without GuiScreen's button
+        // list. New ModularUI (including RSB) already renders that list normally.
+        SelectorButtonRenderBridge.drawIfNeeded(event.getGui().getClass(), () -> {
+            GlStateManager.disableLighting();
+            GlStateManager.disableDepth();
+            current.getButton().drawButton(Minecraft.getMinecraft(),
+                    event.getMouseX(), event.getMouseY(), event.getRenderPartialTicks());
+            GlStateManager.enableDepth();
+        });
         current.drawOverlay(event.getMouseX(), event.getMouseY());
     }
 

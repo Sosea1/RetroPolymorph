@@ -47,10 +47,15 @@ public abstract class Ae2CraftingExecutionMixin {
             return;
         }
         Ae2CraftExecutionScope.enter(player);
-        // AE2 UEL snapshots SlotCraftingTerm#getStack() as the requested craft
-        // result before its later recipe lookup. Pin the actual server slot now,
-        // while we still know the player/container-specific selection.
-        Ae2TerminalRecipePin.pinForCraftClick(player, (Slot) (Object) this);
+        try {
+            // AE2 UEL snapshots SlotCraftingTerm#getStack() as the requested craft
+            // result before its later recipe lookup. Pin the actual server slot now,
+            // while we still know the player/container-specific selection.
+            Ae2TerminalRecipePin.pinForCraftClick(player, (Slot) (Object) this);
+        } catch (Throwable t) {
+            Ae2CraftExecutionScope.exit();
+            retropolymorph$LOGGER.warn("Failed to pin recipe for craft click", t);
+        }
     }
 
     /**
@@ -66,10 +71,7 @@ public abstract class Ae2CraftingExecutionMixin {
         if (!PolymorphConfig.isIntegrationAe2Enabled()) {
             return;
         }
-        Container container = Ae2CraftExecutionScope.currentContainer();
-        if (container == null
-                || !"appeng.container.implementations.ContainerWirelessCraftingTerminal"
-                .equals(container.getClass().getName())) {
+        if (!Ae2CraftExecutionScope.isActive()) {
             return;
         }
 
@@ -83,15 +85,17 @@ public abstract class Ae2CraftingExecutionMixin {
         }
 
         cir.setReturnValue(expected.copy());
+        Container container = Ae2CraftExecutionScope.currentContainer();
+        String containerName = container == null ? "<unknown>" : container.getClass().getName();
         ResourceLocation beforeId = before.getItem().getRegistryName();
         ResourceLocation afterId = expected.getItem().getRegistryName();
-        String key = container.getClass().getName()
+        String key = containerName
                 + "|" + String.valueOf(beforeId) + ":" + before.getMetadata()
                 + "->" + String.valueOf(afterId) + ":" + expected.getMetadata();
         if (retropolymorph$LOGGED_WIRELESS_RETURN_PINS.add(key)) {
             retropolymorph$LOGGER.debug(
-                    "AE2 wireless craft return pin active: container={}, before={}x{}, after={}x{}",
-                    container.getClass().getName(),
+                    "AE2 craft return pin active: container={}, before={}x{}, after={}x{}",
+                    containerName,
                     beforeId,
                     Integer.valueOf(before.getCount()),
                     afterId,

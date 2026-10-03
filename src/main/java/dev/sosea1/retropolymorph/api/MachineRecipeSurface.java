@@ -31,6 +31,11 @@ public interface MachineRecipeSurface {
      */
     Object getRecipeOwner();
 
+    default SelectionScope getSelectionScope() {
+        Object owner = getRecipeOwner();
+        return owner == null ? SelectionScope.local() : SelectionScope.shared(owner);
+    }
+
     /** Number of ItemStack inputs participating in the client snapshot. */
     int getInputCount();
 

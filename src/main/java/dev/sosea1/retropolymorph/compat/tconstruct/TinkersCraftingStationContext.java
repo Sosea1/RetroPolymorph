@@ -98,9 +98,6 @@ public class TinkersCraftingStationContext extends CraftingContext {
     }
 
     private void invalidateCachedStationRecipe() {
-        Container container = getContainer();
-        if (container instanceof TinkersCraftingStationAccess) {
-            ((TinkersCraftingStationAccess) container).retropolymorph$clearLastRecipe();
-        }
+        dev.sosea1.retropolymorph.core.ContainerRecipeCacheHelper.clearLastRecipe(getContainer());
     }
 }

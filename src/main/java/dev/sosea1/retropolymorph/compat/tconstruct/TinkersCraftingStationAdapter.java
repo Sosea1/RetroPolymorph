@@ -28,7 +28,7 @@ public final class TinkersCraftingStationAdapter implements RecipeSelectionAdapt
 
     @Override
     public AdapterDetectionResult probe(Container container) {
-        if (container == null || !hasClassInHierarchy(container.getClass(), TARGET)) {
+        if (container == null || (!hasClassInHierarchy(container.getClass(), TARGET) && !container.getClass().getName().endsWith("ContainerCraftingStation"))) {
             return AdapterDetectionResult.miss();
         }
         SelectionContext detected = CraftingContextDetector.detect(container);

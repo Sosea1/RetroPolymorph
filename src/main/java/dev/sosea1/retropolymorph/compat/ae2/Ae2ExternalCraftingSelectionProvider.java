@@ -36,7 +36,15 @@ public final class Ae2ExternalCraftingSelectionProvider implements ExternalCraft
 
     @Nullable
     @Override
-    public ResourceLocation getSelectedRecipeId(InventoryCrafting matrix, @Nullable Container owner) {
+    public ResourceLocation getSelectedRecipeId(
+            InventoryCrafting matrix,
+            @Nullable Container owner,
+            @Nullable dev.sosea1.retropolymorph.core.RecipeSelectionState currentState) {
+        if (matrix == null) {
+            return null;
+        }
+
+        // 1. Direct AE2 terminal owner check: if owner is a known AE2 container
         ResourceLocation selected = owner == null ? null : Ae2SelectionStore.get(owner);
         if (selected == null && owner instanceof Ae2CraftingTermExtension) {
             selected = ((Ae2CraftingTermExtension) owner).retropolymorph$getAe2SelectedRecipeId();
@@ -45,34 +53,43 @@ public final class Ae2ExternalCraftingSelectionProvider implements ExternalCraft
             }
         }
 
-        if (selected == null && matrix.getSizeInventory() == 9) {
-            Container active = Ae2MatrixChangeScope.currentContainer();
-            if (active != null) {
-                selected = Ae2SelectionStore.get(active);
-                if (selected == null && active instanceof Ae2CraftingTermExtension) {
-                    selected = ((Ae2CraftingTermExtension) active).retropolymorph$getAe2SelectedRecipeId();
+        // If owner is an explicit container and not an AE2 scratch owner, do not touch it!
+        if (owner != null && !isAe2ScratchOwner(owner)) {
+            return selected;
+        }
+
+        // 2. Scratch matrix fallback (only applies to scratch matrices without pre-existing machine selections)
+        if (selected == null && isAe2ScratchMatrix(matrix, owner)) {
+            // If the matrix already has its own selection state (e.g. auto crafter), do not hijack it!
+            if (currentState == null || currentState.getSelectedRecipeId() == null) {
+                Container active = Ae2MatrixChangeScope.currentContainer();
+                if (active != null) {
+                    selected = Ae2SelectionStore.get(active);
+                    if (selected == null && active instanceof Ae2CraftingTermExtension) {
+                        selected = ((Ae2CraftingTermExtension) active).retropolymorph$getAe2SelectedRecipeId();
+                        if (selected != null) {
+                            Ae2SelectionStore.set(active, selected);
+                        }
+                    }
+                }
+
+                if (selected == null && Ae2CraftExecutionScope.isActive()) {
+                    selected = Ae2CraftExecutionScope.currentSelectedRecipeId();
                     if (selected != null) {
-                        Ae2SelectionStore.set(active, selected);
+                        String ownerClass = owner == null ? "<null>" : owner.getClass().getName();
+                        String logKey = ownerClass + "|" + selected;
+                        if (LOGGED_AE2_SCOPED_BRIDGES.add(logKey)) {
+                            LOGGER.debug(
+                                    "AE2 scoped CraftingManager bridge active: owner={}, selected={}",
+                                    ownerClass,
+                                    selected);
+                        }
                     }
                 }
             }
         }
 
-        if (selected == null && Ae2CraftExecutionScope.isActive() && matrix.getSizeInventory() == 9) {
-            selected = Ae2CraftExecutionScope.currentSelectedRecipeId();
-            if (selected != null) {
-                String ownerClass = owner == null ? "<null>" : owner.getClass().getName();
-                String logKey = ownerClass + "|" + selected;
-                if (LOGGED_AE2_SCOPED_BRIDGES.add(logKey)) {
-                    LOGGER.debug(
-                            "AE2 scoped CraftingManager bridge active: owner={}, selected={}",
-                            ownerClass,
-                            selected);
-                }
-            }
-        }
-
-        if (selected != null && owner != null) {
+        if (selected != null && owner != null && !isContainerNull(owner)) {
             String ownerClass = owner.getClass().getName();
             if (LOGGED_AE2_OWNER_BRIDGES.add(ownerClass)) {
                 LOGGER.debug(
@@ -83,6 +100,43 @@ public final class Ae2ExternalCraftingSelectionProvider implements ExternalCraft
         }
 
         return selected;
+    }
+
+    @Nullable
+    @Override
+    public ResourceLocation getSelectedRecipeId(InventoryCrafting matrix, @Nullable Container owner) {
+        return getSelectedRecipeId(matrix, owner, null);
+    }
+
+    public static boolean isAe2ScratchMatrix(InventoryCrafting matrix, @Nullable Container owner) {
+        if (matrix.getSizeInventory() != 9) {
+            return false;
+        }
+        if (matrix.getWidth() != 3 || matrix.getHeight() != 3) {
+            return false;
+        }
+        return isAe2ScratchOwner(owner);
+    }
+
+    public static boolean isAe2ScratchOwner(@Nullable Container owner) {
+        if (owner == null) {
+            return true;
+        }
+        if (owner instanceof Ae2CraftingTermExtension) {
+            return true;
+        }
+        if (owner == Ae2CraftExecutionScope.currentContainer() || owner == Ae2MatrixChangeScope.currentContainer()) {
+            return true;
+        }
+        return isContainerNull(owner);
+    }
+
+    public static boolean isContainerNull(@Nullable Container owner) {
+        if (owner == null) {
+            return false;
+        }
+        String className = owner.getClass().getName();
+        return className.contains("ContainerNull") || className.contains("MirrorContainer");
     }
 
     @Override

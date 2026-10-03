@@ -1,12 +1,8 @@
 package dev.sosea1.retropolymorph.api;
 
 import javax.annotation.Nullable;
-import java.util.Objects;
 
-/**
- * Metadata indicating whether recipe selection is private to this container context
- * or shared among multiple players/views of the same underlying owner.
- */
+/** Describes whether selection belongs to one view or a shared backing object. */
 public final class SelectionScope {
 
     public enum Kind {

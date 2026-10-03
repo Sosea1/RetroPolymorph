@@ -133,7 +133,19 @@ final class CyclicCrafterSurface implements MachineRecipeSurface {
         if (this.selection == null) {
             return;
         }
-        this.selection.retropolymorph$setSelectedRecipeId(RecipeKey.parseForgeId(recipeKey));
+        ResourceLocation id = RecipeKey.parseForgeId(recipeKey);
+        this.selection.retropolymorph$setSelectedRecipeId(id);
+    }
+
+    @Override
+    public void refreshPreview() {
+        refreshMatrix();
+        if (this.selection != null) {
+            ResourceLocation id = this.selection.retropolymorph$getSelectedRecipeId();
+            if (id != null) {
+                this.selection.retropolymorph$setSelectedRecipeId(id);
+            }
+        }
     }
 
     @Override

@@ -49,6 +49,23 @@ public interface ExternalCraftingSelectionProvider {
     ResourceLocation getSelectedRecipeId(InventoryCrafting matrix, @Nullable Container owner);
 
     /**
+     * Attempts to resolve an externally selected recipe ID for the given matrix, container owner,
+     * and current matrix selection state.
+     *
+     * @param matrix the crafting inventory
+     * @param owner the container owning the matrix, if known
+     * @param currentState the current selection state on the matrix, if any
+     * @return the selected recipe ID, or null if this provider has no selection
+     */
+    @Nullable
+    default ResourceLocation getSelectedRecipeId(
+            InventoryCrafting matrix,
+            @Nullable Container owner,
+            @Nullable RecipeSelectionState currentState) {
+        return getSelectedRecipeId(matrix, owner);
+    }
+
+    /**
      * Called when a recipe output is resolved for the matrix.
      */
     default void onRecipeOutputResolved(InventoryCrafting matrix, @Nullable Container owner, IRecipe recipe) {

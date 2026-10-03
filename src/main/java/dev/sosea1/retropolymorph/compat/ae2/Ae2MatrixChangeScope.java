@@ -32,4 +32,8 @@ public final class Ae2MatrixChangeScope {
     public static Container currentContainer() {
         return CURRENT.get();
     }
+
+    public static void resetIfLeaked() {
+        CURRENT.remove();
+    }
 }

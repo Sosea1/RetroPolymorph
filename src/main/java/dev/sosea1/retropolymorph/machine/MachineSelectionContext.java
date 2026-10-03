@@ -141,7 +141,6 @@ public final class MachineSelectionContext implements SelectionContext {
 
     @Override
     public SelectionScope getSelectionScope() {
-        Object owner = this.surface.getRecipeOwner();
-        return owner != null ? SelectionScope.shared(owner) : SelectionScope.local();
+        return this.surface.getSelectionScope();
     }
 }

@@ -57,7 +57,7 @@ public abstract class WirelessCraftingTermMixin implements Ae2CraftingTermExtens
         Ae2SelectionStore.set((Container) (Object) this, recipeId);
     }
 
-    @Inject(method = "func_75130_a", at = @At("HEAD"), remap = false, require = 0)
+    @Inject(method = {"func_75130_a", "onCraftMatrixChanged"}, at = @At("HEAD"), remap = false, require = 0)
     private void retropolymorph$seedWirelessMatrix(IInventory inventory, CallbackInfo ci) {
         if (!PolymorphConfig.isIntegrationAe2Enabled()) {
             return;
@@ -67,7 +67,7 @@ public abstract class WirelessCraftingTermMixin implements Ae2CraftingTermExtens
         Ae2TerminalRecipePin.handleMatrixChangedHead(self);
     }
 
-    @Inject(method = "func_75130_a", at = @At("RETURN"), remap = false, require = 0)
+    @Inject(method = {"func_75130_a", "onCraftMatrixChanged"}, at = @At("RETURN"), remap = false, require = 0)
     private void retropolymorph$pinWirelessResult(IInventory inventory, CallbackInfo ci) {
         try {
             if (!PolymorphConfig.isIntegrationAe2Enabled()) {

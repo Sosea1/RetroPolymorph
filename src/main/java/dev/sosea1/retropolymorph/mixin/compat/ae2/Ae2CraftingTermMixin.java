@@ -59,7 +59,7 @@ public abstract class Ae2CraftingTermMixin implements Ae2CraftingTermExtension {
         Ae2SelectionStore.set((Container) (Object) this, recipeId);
     }
 
-    @Inject(method = "func_75130_a", at = @At("HEAD"), remap = false, require = 0)
+    @Inject(method = {"func_75130_a", "onCraftMatrixChanged"}, at = @At("HEAD"), remap = false, require = 0)
     private void retropolymorph$onMatrixChangedHead(IInventory inv, CallbackInfo ci) {
         if (!PolymorphConfig.isIntegrationAe2Enabled()) {
             return;
@@ -69,7 +69,7 @@ public abstract class Ae2CraftingTermMixin implements Ae2CraftingTermExtension {
         Ae2TerminalRecipePin.handleMatrixChangedHead(self);
     }
 
-    @Inject(method = "func_75130_a", at = @At("RETURN"), remap = false, require = 0)
+    @Inject(method = {"func_75130_a", "onCraftMatrixChanged"}, at = @At("RETURN"), remap = false, require = 0)
     private void retropolymorph$onMatrixChangedReturn(IInventory inv, CallbackInfo ci) {
         try {
             if (!PolymorphConfig.isIntegrationAe2Enabled()) {
