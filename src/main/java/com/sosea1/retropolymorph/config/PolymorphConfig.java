@@ -1,0 +1,384 @@
+package com.sosea1.retropolymorph.config;
+
+import com.sosea1.retropolymorph.api.RecipeKey;
+import com.sosea1.retropolymorph.preference.RecipePreferencePolicy;
+import com.sosea1.retropolymorph.preference.SmeltingPreferencePolicy;
+import net.minecraftforge.common.config.Configuration;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+
+/** User-facing selector, policy and integration configuration. */
+public final class PolymorphConfig {
+
+    private static List<String> preferredMods = Collections.emptyList();
+    private static List<String> preferredRecipes = Collections.emptyList();
+    private static boolean preferModdedOverVanilla = true;
+    private static boolean rememberPlayerChoices = true;
+
+    private static List<String> preferredSmeltingMods = Collections.emptyList();
+    private static List<String> preferredSmeltingOutputs = Collections.emptyList();
+    private static boolean preferModdedSmeltingOverVanilla = true;
+
+    private static final String CATEGORY_SELECTOR = "selector";
+    private static final String CATEGORY_INTEGRATIONS = "integrations";
+    private static final String CATEGORY_POLICY = "policy";
+    private static final String CATEGORY_SMELTING_POLICY = "smeltingPolicy";
+
+    private static boolean selectorEnabled = true;
+    private static SelectorMode selectorMode = SelectorMode.COMPACT;
+    private static int buttonOffsetX;
+    private static int buttonOffsetY;
+    private static boolean showRecipeKeyInTooltip = true;
+    private static boolean showRecipeSourceInTooltip = true;
+    private static boolean rightClickClears = true;
+    private static boolean wheelCyclesButton = true;
+    private static boolean closeAfterSelection = true;
+
+    private static boolean integrationAe2 = true;
+    private static boolean integrationExtendedCrafting = true;
+    private static boolean integrationIc2 = true;
+    private static boolean integrationCyclic = true;
+    private static boolean integrationRftools = true;
+    private static boolean integrationGregTech = true;
+    private static boolean integrationAvaritia = true;
+    private static boolean integrationArtisanWorktables = true;
+    private static boolean integrationTinkers = true;
+    private static boolean integrationEnderIo = true;
+    private static boolean integrationThaumcraft = true;
+    private static boolean integrationRefinedStorage = true;
+    private static boolean integrationMekanism = true;
+    private static boolean integrationThermal = true;
+    private static boolean integrationRetroSophisticatedBackpacks = true;
+    private static boolean integrationExtraUtilities2 = true;
+    private static boolean integrationJei = true;
+
+    private PolymorphConfig() {
+    }
+
+    public static void load(File file) {
+        Configuration config = new Configuration(file);
+        config.load();
+
+        config.setCategoryComment(
+                CATEGORY_POLICY,
+                "Crafting and recipe-backed machine default-selection policy. Explicit player choices always win.\n"
+                        + "Example:\n"
+                        + "B:preferModdedOverVanilla=true\n"
+                        + "S:preferredMods <\n"
+                        + "    thermalfoundation\n"
+                        + "    mekanism\n"
+                        + "    *\n"
+                        + "    minecraft\n"
+                        + ">\n"
+                        + "S:preferredRecipes <\n"
+                        + "    enderio:example_recipe\n"
+                        + ">\n"
+                        + "Lists are ordered from highest to lowest priority.\n"
+                        + "Recipe keys can be copied from selector tooltips when selector.showRecipeKeyInTooltip=true.");
+
+        config.setCategoryComment(
+                CATEGORY_SMELTING_POLICY,
+                "Furnace-only default-selection policy. It uses output item IDs, not internal smelt keys.\n"
+                        + "Example:\n"
+                        + "B:preferModdedOverVanilla=true\n"
+                        + "S:preferredMods <\n"
+                        + "    thermalfoundation\n"
+                        + "    mekanism\n"
+                        + "    *\n"
+                        + "    minecraft\n"
+                        + ">\n"
+                        + "S:preferredOutputs <\n"
+                        + "    thermalfoundation:material\n"
+                        + "    mekanism:ingot@0\n"
+                        + ">\n"
+                        + "Output selectors use modid:item; append @meta only when a specific metadata value is required.");
+
+        selectorEnabled = config.getBoolean(
+                "enabled",
+                CATEGORY_SELECTOR,
+                true,
+                "Show the recipe selector when a compatible GUI has more than one result.");
+        selectorMode = SelectorMode.parse(config.getString(
+                "mode",
+                CATEGORY_SELECTOR,
+                "compact",
+                "Selector presentation mode: compact shows five choices with arrows/wheel; "
+                        + "classic shows the full authoritative list (up to 15) like upstream Polymorph.",
+                new String[] { "compact", "classic" }));
+        buttonOffsetX = config.getInt(
+                "buttonOffsetX",
+                CATEGORY_SELECTOR,
+                0,
+                -200,
+                200,
+                "Horizontal selector-button offset in GUI pixels.");
+        buttonOffsetY = config.getInt(
+                "buttonOffsetY",
+                CATEGORY_SELECTOR,
+                0,
+                -200,
+                200,
+                "Vertical selector-button offset in GUI pixels.");
+        showRecipeKeyInTooltip = config.getBoolean(
+                "showRecipeKeyInTooltip",
+                CATEGORY_SELECTOR,
+                true,
+                "Show the internal recipe key in recipe tooltips.");
+        showRecipeSourceInTooltip = config.getBoolean(
+                "showRecipeSourceInTooltip",
+                CATEGORY_SELECTOR,
+                true,
+                "Show the owning recipe mod/source in recipe tooltips.");
+        rightClickClears = config.getBoolean(
+                "rightClickClears",
+                CATEGORY_SELECTOR,
+                true,
+                "Right-clicking the selector button returns to automatic recipe selection.");
+        wheelCyclesButton = config.getBoolean(
+                "wheelCyclesButton",
+                CATEGORY_SELECTOR,
+                true,
+                "Mouse-wheel over the selector button cycles recipes without opening the panel.");
+        closeAfterSelection = config.getBoolean(
+                "closeAfterSelection",
+                CATEGORY_SELECTOR,
+                true,
+                "Close the recipe panel after choosing a recipe.");
+
+        integrationAe2 = integration(config, "ae2", true, "Applied Energistics 2 terminals.");
+        integrationExtendedCrafting = integration(config, "extendedCrafting", true, "Extended Crafting tables.");
+        integrationIc2 = integration(config, "ic2", true, "IndustrialCraft 2 crafting machines.");
+        integrationCyclic = integration(config, "cyclic", true, "Cyclic persistent workbench.");
+        integrationRftools = integration(config, "rftools", true, "RFTools/RFTools Control crafting surfaces.");
+        integrationGregTech = integration(config, "gregTech", true, "GregTech CE / CEu Workbench.");
+        integrationAvaritia = integration(config, "avaritia", true, "Avaritia Extreme Crafting Table.");
+        integrationArtisanWorktables = integration(
+                config,
+                "artisanWorktables",
+                true,
+                "Artisan Worktables custom recipes and vanilla crafting fallback.");
+        integrationTinkers = integration(config, "tconstruct", true, "Tinkers' Construct Crafting Station.");
+        integrationEnderIo = integration(config, "enderio", true, "Ender IO Crafter ghost recipe and automatic craft path.");
+        integrationThaumcraft = integration(config, "thaumcraft", true, "Thaumcraft 6 Arcane Workbench recipe selection.");
+        integrationRefinedStorage = integration(config, "refinedStorage", true, "Refined Storage 1.12 Crafting Grid and regular Pattern Grid recipe selection.");
+        integrationMekanism = integration(config, "mekanism", true, "Mekanism Formulaic Assemblicator manual 3x3 recipe selection.");
+        integrationThermal = integration(config, "thermalExpansion", true, "Thermal Expansion Sequential Fabricator ghost-grid and committed recipe selection.");
+        integrationRetroSophisticatedBackpacks = integration(
+                config,
+                "retroSophisticatedBackpacks",
+                true,
+                "Retro Sophisticated Backpacks Crafting Upgrade. Uses the backpack's real registered crafting wrapper/output pair.");
+        integrationExtraUtilities2 = integration(
+                config,
+                "extraUtilities2",
+                true,
+                "Extra Utilities 2 Mechanical/Analog Crafter. Uses a focused 3x3 bridge and machine-owned selected recipe state.");
+        integrationJei = integration(
+                config,
+                "jei",
+                true,
+                "Just Enough Items (JEI) and Had Enough Items (HEI) recipe transfer and GUI exclusion support.");
+
+        preferModdedOverVanilla = config.getBoolean(
+                "preferModdedOverVanilla",
+                CATEGORY_POLICY,
+                true,
+                "When no player choice or explicit policy matches, prefer the first modded recipe when the native default is vanilla.\n"
+                        + "Set false to preserve the native Forge/machine recipe order.");
+
+        rememberPlayerChoices = config.getBoolean(
+                "rememberPlayerChoices",
+                CATEGORY_POLICY,
+                true,
+                "Remember player recipe choices across crafting sessions in player NBT.\n"
+                        + "When set to false, selections are session-only (like RetroPolymorph Legacy),\n"
+                        + "resetting when closing the GUI or changing inputs without persistent storage.");
+
+        String[] rawPreferredMods = config.getStringList(
+                "preferredMods",
+                CATEGORY_POLICY,
+                new String[0],
+                "Ordered mod priority list (UniDict-style). Earlier mods have higher priority.\n"
+                        + "Use '*' to represent unlisted mods (e.g. 'thermalfoundation', 'mekanism', '*', 'minecraft').\n"
+                        + "If '*' is omitted, unlisted mods are placed at the end of the list.");
+        preferredMods = parsePreferredMods(rawPreferredMods);
+
+        String[] rawPreferredRecipes = config.getStringList(
+                "preferredRecipes",
+                CATEGORY_POLICY,
+                new String[0],
+                "Ordered recipe priorities. Earlier recipes in this list win over later ones.\n"
+                        + "Format: recipe_id (e.g. 'enderio:special_recipe').");
+        preferredRecipes = parsePreferredRecipes(rawPreferredRecipes);
+
+        RecipePreferencePolicy.configure(
+                preferredMods,
+                preferredRecipes,
+                preferModdedOverVanilla);
+
+        preferModdedSmeltingOverVanilla = config.getBoolean(
+                "preferModdedOverVanilla",
+                CATEGORY_SMELTING_POLICY,
+                true,
+                "When no player choice or explicit smelting policy matches, prefer the first modded output when the native furnace output is vanilla.\n"
+                        + "Set false to preserve native FurnaceRecipes order.");
+
+        String[] rawPreferredSmeltingMods = config.getStringList(
+                "preferredMods",
+                CATEGORY_SMELTING_POLICY,
+                new String[0],
+                "Ordered output-mod priority list. Earlier mods have higher priority.\n"
+                        + "Use '*' to represent unlisted mods (e.g. 'thermalfoundation', 'mekanism', '*', 'minecraft').\n"
+                        + "If '*' is omitted, unlisted mods are placed at the end of the list.");
+        preferredSmeltingMods = parsePreferredMods(rawPreferredSmeltingMods);
+
+        String[] rawPreferredSmeltingOutputs = config.getStringList(
+                "preferredOutputs",
+                CATEGORY_SMELTING_POLICY,
+                new String[0],
+                "Ordered furnace output priorities. Earlier outputs win over later ones.\n"
+                        + "Use modid:item to match every metadata value, or modid:item@meta for one exact metadata value.");
+        preferredSmeltingOutputs = SmeltingPreferencePolicy.parsePreferredOutputs(
+                rawPreferredSmeltingOutputs);
+
+        SmeltingPreferencePolicy.configure(
+                preferredSmeltingMods,
+                preferredSmeltingOutputs,
+                preferModdedSmeltingOverVanilla);
+
+        if (config.hasChanged()) {
+            config.save();
+        }
+    }
+
+    public static boolean isSelectorEnabled() {
+        return selectorEnabled;
+    }
+
+    public static SelectorMode getSelectorMode() {
+        return selectorMode;
+    }
+
+    public static int getButtonOffsetX() {
+        return buttonOffsetX;
+    }
+
+    public static int getButtonOffsetY() {
+        return buttonOffsetY;
+    }
+
+    public static boolean isShowRecipeKeyInTooltip() {
+        return showRecipeKeyInTooltip;
+    }
+
+    public static boolean isShowRecipeSourceInTooltip() {
+        return showRecipeSourceInTooltip;
+    }
+
+    public static boolean isRightClickClears() {
+        return rightClickClears;
+    }
+
+    public static boolean isWheelCyclesButton() {
+        return wheelCyclesButton;
+    }
+
+    public static boolean isCloseAfterSelection() {
+        return closeAfterSelection;
+    }
+
+    public static boolean isIntegrationAe2Enabled() { return integrationAe2; }
+    public static boolean isIntegrationExtendedCraftingEnabled() { return integrationExtendedCrafting; }
+    public static boolean isIntegrationIc2Enabled() { return integrationIc2; }
+    public static boolean isIntegrationCyclicEnabled() { return integrationCyclic; }
+    public static boolean isIntegrationRftoolsEnabled() { return integrationRftools; }
+    public static boolean isIntegrationGregTechEnabled() { return integrationGregTech; }
+    public static boolean isIntegrationAvaritiaEnabled() { return integrationAvaritia; }
+    public static boolean isIntegrationArtisanWorktablesEnabled() { return integrationArtisanWorktables; }
+    public static boolean isIntegrationTinkersEnabled() { return integrationTinkers; }
+    public static boolean isIntegrationEnderIoEnabled() { return integrationEnderIo; }
+    public static boolean isIntegrationThaumcraftEnabled() { return integrationThaumcraft; }
+    public static boolean isIntegrationRefinedStorageEnabled() { return integrationRefinedStorage; }
+    public static boolean isIntegrationMekanismEnabled() { return integrationMekanism; }
+    public static boolean isIntegrationThermalEnabled() { return integrationThermal; }
+    public static boolean isIntegrationRetroSophisticatedBackpacksEnabled() { return integrationRetroSophisticatedBackpacks; }
+    public static boolean isIntegrationExtraUtilities2Enabled() { return integrationExtraUtilities2; }
+    public static boolean isIntegrationJeiEnabled() { return integrationJei; }
+
+    public static List<String> getPreferredMods() {
+        return preferredMods;
+    }
+
+    public static List<String> getPreferredRecipes() {
+        return preferredRecipes;
+    }
+
+    public static boolean isPreferModdedOverVanilla() {
+        return preferModdedOverVanilla;
+    }
+
+    public static boolean isRememberPlayerChoices() {
+        return rememberPlayerChoices;
+    }
+
+    public static void setRememberPlayerChoicesForTests(boolean enabled) {
+        rememberPlayerChoices = enabled;
+    }
+
+    public static List<String> getPreferredSmeltingMods() {
+        return preferredSmeltingMods;
+    }
+
+    public static List<String> getPreferredSmeltingOutputs() {
+        return preferredSmeltingOutputs;
+    }
+
+    public static boolean isPreferModdedSmeltingOverVanilla() {
+        return preferModdedSmeltingOverVanilla;
+    }
+
+    public static List<String> parsePreferredMods(String[] values) {
+        if (values == null || values.length == 0) {
+            return Collections.emptyList();
+        }
+        ArrayList<String> result = new ArrayList<String>();
+        for (String raw : values) {
+            if (raw == null) {
+                continue;
+            }
+            String mod = raw.trim().toLowerCase(Locale.ROOT);
+            if (!mod.isEmpty() && !result.contains(mod)) {
+                result.add(mod);
+            }
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    public static List<String> parsePreferredRecipes(String[] values) {
+        if (values == null || values.length == 0) {
+            return Collections.emptyList();
+        }
+        ArrayList<String> result = new ArrayList<String>();
+        for (String raw : values) {
+            if (raw == null) {
+                continue;
+            }
+            String value = raw.trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            if (RecipeKey.isWireSafe(value) && !result.contains(value)) {
+                result.add(value);
+            }
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    private static boolean integration(Configuration config, String name, boolean defaultValue, String description) {
+        return config.getBoolean(name, CATEGORY_INTEGRATIONS, defaultValue, description);
+    }
+}

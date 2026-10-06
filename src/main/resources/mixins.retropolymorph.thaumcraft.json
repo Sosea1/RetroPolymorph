@@ -1,7 +1,7 @@
 {
   "required": false,
   "minVersion": "0.8.5",
-  "package": "dev.sosea1.retropolymorph.mixin.compat.thaumcraft",
+  "package": "com.sosea1.retropolymorph.mixin.compat.thaumcraft",
   "refmap": "mixins.retropolymorph.refmap.json",
   "target": "@env(DEFAULT)",
   "compatibilityLevel": "JAVA_8",

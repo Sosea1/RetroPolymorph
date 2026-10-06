@@ -1,7 +1,7 @@
 {
   "required": false,
   "minVersion": "0.8",
-  "package": "dev.sosea1.retropolymorph.mixin.compat.thermal",
+  "package": "com.sosea1.retropolymorph.mixin.compat.thermal",
   "refmap": "mixins.retropolymorph.refmap.json",
   "compatibilityLevel": "JAVA_8",
   "mixins": [

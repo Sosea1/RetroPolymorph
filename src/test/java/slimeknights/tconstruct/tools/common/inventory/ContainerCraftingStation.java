@@ -1,9 +1,9 @@
 package slimeknights.tconstruct.tools.common.inventory;
 
-import dev.sosea1.retropolymorph.compat.tconstruct.TinkersSharedSelectionRegistry;
-import dev.sosea1.retropolymorph.core.CraftingMatrixExtension;
-import dev.sosea1.retropolymorph.core.RecipeSelectionState;
-import dev.sosea1.retropolymorph.mixin.SlotCraftingAccessor;
+import com.sosea1.retropolymorph.compat.tconstruct.TinkersSharedSelectionRegistry;
+import com.sosea1.retropolymorph.core.CraftingMatrixExtension;
+import com.sosea1.retropolymorph.core.RecipeSelectionState;
+import com.sosea1.retropolymorph.mixin.SlotCraftingAccessor;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.IInventory;
@@ -21,7 +21,7 @@ import javax.annotation.Nullable;
  */
 public class ContainerCraftingStation extends Container {
 
-    public static class StubMatrix extends InventoryCrafting implements CraftingMatrixExtension, dev.sosea1.retropolymorph.compat.tconstruct.TinkersPersistentMatrixAccess {
+    public static class StubMatrix extends InventoryCrafting implements CraftingMatrixExtension, com.sosea1.retropolymorph.compat.tconstruct.TinkersPersistentMatrixAccess {
         private final Container container;
         private final IInventory persistentParent;
         private RecipeSelectionState state;

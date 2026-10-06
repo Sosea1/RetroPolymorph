@@ -1,11 +1,15 @@
 {
   "required": false,
   "minVersion": "0.8.5",
-  "package": "dev.sosea1.retropolymorph.mixin.compat.gregtech",
+  "package": "com.sosea1.retropolymorph.mixin.compat.gregtech",
   "refmap": "mixins.retropolymorph.refmap.json",
   "target": "@env(DEFAULT)",
   "compatibilityLevel": "JAVA_8",
-  "mixins": ["GregTechRecipeMemoryWidgetMixin"],
+  "mixins": [
+    "GregTechCraftingRecipeMemoryMixin",
+    "GregTechInputSyncHandlerMixin",
+    "GregTechRecipeMemoryWidgetMixin"
+  ],
   "client": [],
   "server": [],
   "injectors": { "defaultRequire": 0 }
