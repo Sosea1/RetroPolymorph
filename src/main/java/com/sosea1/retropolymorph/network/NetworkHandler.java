@@ -39,6 +39,7 @@ public final class NetworkHandler {
                 1,
                 Side.CLIENT);
         initialized = true;
+        CHANNEL.registerMessage(RFToolsEditorMessage.Handler.class, RFToolsEditorMessage.class, 2, Side.SERVER);
     }
 
     public static void select(
@@ -58,6 +59,10 @@ public final class NetworkHandler {
     public static void query(int windowId, int sessionToken, int inputRevision) {
         CHANNEL.sendToServer(RecipeSelectionMessage.query(
                 windowId, sessionToken, inputRevision));
+    }
+
+    public static void openRFToolsTemplate(int windowId, int recipeIndex) {
+        CHANNEL.sendToServer(new RFToolsEditorMessage(windowId, recipeIndex));
     }
 
     static void sync(

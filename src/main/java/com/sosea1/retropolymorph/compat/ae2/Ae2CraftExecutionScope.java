@@ -81,6 +81,25 @@ public final class Ae2CraftExecutionScope {
         CURRENT.set(current.previous);
     }
 
+    public static Scope open(EntityPlayer player) {
+        enter(player);
+        return new Scope(CURRENT.get());
+    }
+
+    /** Idempotent close prevents a failed pin from popping an outer craft scope. */
+    public static final class Scope implements AutoCloseable {
+        private final Frame frame;
+        private boolean closed;
+
+        private Scope(Frame frame) { this.frame = frame; }
+
+        @Override
+        public void close() {
+            if (!this.closed && CURRENT.get() == this.frame) { exit(); }
+            this.closed = true;
+        }
+    }
+
     public static void resetIfLeaked() {
         if (CURRENT.get() != null) {
             LOGGER.warn("Clearing leaked AE2 craft execution scope at tick end");

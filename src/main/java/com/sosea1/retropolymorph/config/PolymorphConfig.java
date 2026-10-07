@@ -63,6 +63,10 @@ public final class PolymorphConfig {
         Configuration config = new Configuration(file);
         config.load();
 
+        config.setCategoryComment(CATEGORY_INTEGRATIONS,
+                "Enable compatibility with installed mods. Changes require a game restart; "
+                        + "disabled integrations do not register their optional mixins.");
+
         config.setCategoryComment(
                 CATEGORY_POLICY,
                 "Crafting and recipe-backed machine default-selection policy. Explicit player choices always win.\n"

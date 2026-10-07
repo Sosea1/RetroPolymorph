@@ -16,8 +16,9 @@ import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 
 import java.util.Collections;
 import java.util.Set;
@@ -38,23 +39,26 @@ public abstract class Ae2CraftingExecutionMixin {
     private static final Set<String> retropolymorph$LOGGED_WIRELESS_RETURN_PINS =
             Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
 
-    @Inject(method = "doClick", at = @At("HEAD"), remap = false, require = 1)
-    private void retropolymorph$beginCraftExecution(
+    @WrapMethod(method = "doClick", remap = false, require = 1)
+    private void retropolymorph$craftExecution(
             InventoryAction action,
             EntityPlayer player,
-            CallbackInfo ci) {
+            Operation<Void> original) {
         if (!PolymorphConfig.isIntegrationAe2Enabled()) {
+            original.call(action, player);
             return;
         }
-        Ae2CraftExecutionScope.enter(player);
-        try {
+        try (Ae2CraftExecutionScope.Scope scope = Ae2CraftExecutionScope.open(player)) {
             // AE2 UEL snapshots SlotCraftingTerm#getStack() as the requested craft
             // result before its later recipe lookup. Pin the actual server slot now,
             // while we still know the player/container-specific selection.
-            Ae2TerminalRecipePin.pinForCraftClick(player, (Slot) (Object) this);
-        } catch (Throwable t) {
-            Ae2CraftExecutionScope.exit();
-            retropolymorph$LOGGER.warn("Failed to pin recipe for craft click", t);
+            try {
+                Ae2TerminalRecipePin.pinForCraftClick(player, (Slot) (Object) this);
+            } catch (RuntimeException | LinkageError exception) {
+                scope.close();
+                retropolymorph$LOGGER.warn("Failed to pin recipe for craft click", exception);
+            }
+            original.call(action, player);
         }
     }
 
@@ -103,11 +107,4 @@ public abstract class Ae2CraftingExecutionMixin {
         }
     }
 
-    @Inject(method = "doClick", at = @At("RETURN"), remap = false, require = 1)
-    private void retropolymorph$endCraftExecution(
-            InventoryAction action,
-            EntityPlayer player,
-            CallbackInfo ci) {
-        Ae2CraftExecutionScope.exit();
-    }
 }

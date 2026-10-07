@@ -51,14 +51,7 @@ public final class RecipeSelectionHandler
         }
 
         final EntityPlayerMP player = context.getServerHandler().player;
-        RecipeSelectionRateLimiter limiter = RATE_LIMITS.get(player.getUniqueID());
-        if (limiter == null) {
-            RecipeSelectionRateLimiter created = new RecipeSelectionRateLimiter();
-            RecipeSelectionRateLimiter existing = RATE_LIMITS.putIfAbsent(
-                    player.getUniqueID(), created);
-            limiter = existing != null ? existing : created;
-        }
-        if (!limiter.allow(message.isQuery())) {
+        if (!allowRequest(player, message.isQuery())) {
             LOGGER.debug(
                     "Throttled excess C2S selector packet from player={}, type={}",
                     player.getName(),
@@ -73,6 +66,16 @@ public final class RecipeSelectionHandler
             }
         });
         return null;
+    }
+
+    static boolean allowRequest(EntityPlayerMP player, boolean query) {
+        RecipeSelectionRateLimiter limiter = RATE_LIMITS.get(player.getUniqueID());
+        if (limiter == null) {
+            RecipeSelectionRateLimiter created = new RecipeSelectionRateLimiter();
+            RecipeSelectionRateLimiter existing = RATE_LIMITS.putIfAbsent(player.getUniqueID(), created);
+            limiter = existing != null ? existing : created;
+        }
+        return limiter.allow(query);
     }
 
     private static void handleOnServerThread(

@@ -3,6 +3,10 @@ package com.sosea1.retropolymorph.mixin;
 import org.spongepowered.asm.mixin.Mixins;
 import org.spongepowered.asm.mixin.connect.IMixinConnector;
 import zone.rong.mixinbooter.service.ModDiscoverer;
+import net.minecraft.launchwrapper.Launch;
+import org.apache.logging.log4j.LogManager;
+import java.io.File;
+import java.io.IOException;
 
 /** Registers optional compatibility mixins only when their target mod is present. */
 public final class RetroPolymorphMixinConnector implements IMixinConnector {
@@ -65,6 +69,12 @@ public final class RetroPolymorphMixinConnector implements IMixinConnector {
 
     @Override
     public void connect() {
+        try {
+            this.integrationConfig = EarlyIntegrationConfig.read(
+                    new File(new File(Launch.minecraftHome, "config"), "retropolymorph.cfg"));
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot read Retro Polymorph integration switches", exception);
+        }
         addIfPresent(AE2_MOD_ID, AE2_MIXIN_CONFIG);
         addIfPresent(EXTENDED_CRAFTING_MOD_ID, EXTENDED_CRAFTING_MIXIN_CONFIG);
         addIfPresent(JEI_MOD_ID, JEI_MIXIN_CONFIG);
@@ -81,11 +91,30 @@ public final class RetroPolymorphMixinConnector implements IMixinConnector {
         addIfPresent(AVARITIA_MOD_ID, AVARITIA_MIXIN_CONFIG);
         addIfPresent(ARTISAN_WORKTABLES_MOD_ID, ARTISAN_WORKTABLES_MIXIN_CONFIG);
         addIfPresent("gregtech", "mixins.retropolymorph.gregtech.json");
+        addIfPresent("rftools", "mixins.retropolymorph.rftools.json");
     }
 
-    private static void addIfPresent(String modId, String config) {
-        if (ModDiscoverer.isModPresent(modId)) {
-            Mixins.addConfiguration(config);
+    private EarlyIntegrationConfig integrationConfig;
+
+    private void addIfPresent(String modId, String config) {
+        if (!ModDiscoverer.isModPresent(modId)) { return; }
+        String key;
+        switch (modId) {
+            case "appliedenergistics2": key = "ae2"; break;
+            case "extendedcrafting": key = "extendedCrafting"; break;
+            case "rftoolscontrol": key = "rftools"; break;
+            case "refinedstorage": key = "refinedStorage"; break;
+            case "thermalexpansion": key = "thermalExpansion"; break;
+            case "extrautils2": key = "extraUtilities2"; break;
+            case "artisanworktables": key = "artisanWorktables"; break;
+            case "cyclicmagic": key = "cyclic"; break;
+            case "gregtech": key = "gregTech"; break;
+            default: key = modId;
         }
+        if (!this.integrationConfig.isEnabled(key)) {
+            LogManager.getLogger("Retro Polymorph").info("Skipping disabled integration mixins: {}", modId);
+            return;
+        }
+        Mixins.addConfiguration(config);
     }
 }

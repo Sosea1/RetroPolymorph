@@ -3,6 +3,8 @@ package com.sosea1.retropolymorph.compat.rftools;
 import com.sosea1.retropolymorph.core.RecipeProbe;
 import com.sosea1.retropolymorph.api.RecipeKey;
 import com.sosea1.retropolymorph.api.RecipeSelectionContext;
+import com.sosea1.retropolymorph.api.SelectionPersistencePolicy;
+import com.sosea1.retropolymorph.api.SelectionScope;
 import com.sosea1.retropolymorph.core.RecipeResolver;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
@@ -26,9 +28,6 @@ public final class RFToolsCrafterContext implements RecipeSelectionContext {
     private final Slot[] inputSlots;
     private final Slot resultSlot;
     private final InventoryCrafting matrix = new InventoryCrafting(MIRROR_OWNER, 3, 3);
-
-    @Nullable
-    private ResourceLocation selectedRecipeId;
 
     public RFToolsCrafterContext(
             Container container,
@@ -91,33 +90,44 @@ public final class RFToolsCrafterContext implements RecipeSelectionContext {
             return false;
         }
 
-        this.selectedRecipeId = recipeId;
+        RFToolsPreviewSelection.set(this.inputSlots[0].inventory, recipeId);
         applyOutput(recipe);
         return true;
     }
 
     @Override
     public void clearSelection() {
-        this.selectedRecipeId = null;
+        RFToolsPreviewSelection.set(this.inputSlots[0].inventory, null);
         refreshMatrix();
     }
 
     @Override
     @Nullable
     public String getSelectedRecipeKey() {
-        return this.selectedRecipeId == null ? null : this.selectedRecipeId.toString();
+        ResourceLocation selected = RFToolsPreviewSelection.get(this.inputSlots[0].inventory);
+        return selected == null ? null : selected.toString();
     }
 
     @Override
     public void applyRemoteSelection(@Nullable String recipeKey) {
         ResourceLocation recipeId = RecipeKey.parseForgeId(recipeKey);
-        this.selectedRecipeId = recipeId;
+        RFToolsPreviewSelection.set(this.inputSlots[0].inventory, recipeId);
         if (recipeId != null) {
             IRecipe recipe = ForgeRegistries.RECIPES.getValue(recipeId);
             if (recipe != null) {
                 applyOutput(recipe);
             }
         }
+    }
+
+    @Override
+    public SelectionPersistencePolicy getPersistencePolicy() {
+        return SelectionPersistencePolicy.OWNER_ONLY;
+    }
+
+    @Override
+    public SelectionScope getSelectionScope() {
+        return SelectionScope.shared(this.inputSlots[0].inventory);
     }
 
     private void applyOutput(IRecipe recipe) {

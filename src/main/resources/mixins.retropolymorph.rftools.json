@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "com.sosea1.retropolymorph.mixin.compat.rftools",
+  "refmap": "mixins.retropolymorph.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": ["RFToolsCraftingRecipeMixin", "RFToolsPacketCrafterMixin", "RFToolsCrafterTileMixin"],
+  "client": ["RFToolsGuiCrafterMixin", "RFToolsPacketCrafterClientMixin"],
+  "server": [],
+  "injectors": { "defaultRequire": 1 }
+}

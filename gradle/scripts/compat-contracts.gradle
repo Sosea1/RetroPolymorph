@@ -1,0 +1,120 @@
+import groovy.json.JsonSlurper
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Type
+import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.MethodInsnNode
+import java.util.zip.ZipFile
+
+buildscript {
+    repositories { mavenCentral() }
+    dependencies { classpath 'org.ow2.asm:asm-tree:9.7.1' }
+}
+
+// Signature and injection-site checks against supplied, unmodified mod JARs.
+// This does not launch Minecraft or apply mixins.
+tasks.register('verifyCompatContracts') {
+    group = 'verification'
+    description = 'Checks mixin targets against real mod JARs supplied with -PcompatJars (semicolon-separated).'
+    dependsOn tasks.named('classes')
+    doLast {
+        def paths = providers.gradleProperty('compatJars').orElse('').get().split(';').findAll { !it.trim().isEmpty() }
+        if (paths.empty) { throw new GradleException('Supply real mod JARs with -PcompatJars=path1;path2') }
+        def jars = paths.collectMany {
+            def input = file(it.trim())
+            input.isDirectory() ? fileTree(input).matching { include '*.jar' }.files.toList() : [input]
+        }.collect { new ZipFile(it) }
+        def readClass = { byte[] bytes ->
+            def node = new ClassNode()
+            new ClassReader(bytes).accept(node, 0)
+            node
+        }
+        def targetCache = [:]
+        def targetClass = { String name ->
+            if (!targetCache.containsKey(name)) {
+                def archive = jars.find { it.getEntry(name + '.class') != null }
+                targetCache[name] = archive == null ? null : archive.getInputStream(archive.getEntry(name + '.class')).withCloseable { readClass(it.bytes) }
+            }
+            targetCache[name]
+        }
+        def values = { annotation ->
+            def result = [:]
+            def list = annotation?.values ?: []
+            for (int i = 0; i < list.size(); i += 2) { result[list[i]] = list[i + 1] }
+            result
+        }
+        def annotations = { member -> (member.visibleAnnotations ?: []) + (member.invisibleAnnotations ?: []) }
+        int checked = 0
+        def failures = []
+        try {
+            fileTree('src/main/resources').matching { include 'mixins.retropolymorph.*.json' }.each { configFile ->
+                def config = new JsonSlurper().parse(configFile)
+                ((config.mixins ?: []) + (config.client ?: []) + (config.server ?: [])).each { name ->
+                    def classPath = config.package.replace('.', '/') + '/' + name + '.class'
+                    def compiled = sourceSets.main.output.classesDirs.files.collect { new File(it, classPath) }.find { it.exists() }
+                    if (compiled == null) { throw new GradleException('Missing compiled mixin: ' + classPath) }
+                    def mixin = readClass(compiled.bytes)
+                    def annotation = annotations(mixin).find { it.desc == 'Lorg/spongepowered/asm/mixin/Mixin;' }
+                    def targets = values(annotation).targets ?: []
+                    targets.each { targetName ->
+                        def target = targetClass(targetName.replace('.', '/'))
+                        if (target == null) { return }
+                        checked++
+                        def hierarchy = []
+                        for (def cursor = target; cursor != null; cursor = targetClass(cursor.superName)) { hierarchy.add(cursor) }
+                        mixin.fields.each { field ->
+                            if (annotations(field).any { it.desc.endsWith('/Shadow;') }
+                                    && !hierarchy.any { it.fields.any { f -> f.name == field.name && f.desc == field.desc } }) {
+                                failures.add("${name}: missing shadow ${targetName}.${field.name} ${field.desc}")
+                            }
+                        }
+                        mixin.methods.each { method ->
+                            annotations(method).each { hook ->
+                                def args = values(hook)
+                                if (hook.desc.endsWith('/Shadow;')) {
+                                    if (!hierarchy.any { it.methods.any { m -> m.name == method.name && m.desc == method.desc } }) {
+                                        failures.add("${name}: missing shadow method ${targetName}.${method.name}${method.desc}")
+                                    }
+                                } else if (hook.desc.endsWith('/Accessor;')) {
+                                    def fieldType = Type.getReturnType(method.desc).sort == Type.VOID
+                                            ? Type.getArgumentTypes(method.desc)[0].descriptor : Type.getReturnType(method.desc).descriptor
+                                    if (!hierarchy.any { it.fields.any { f -> f.name == args.value && f.desc == fieldType } }) {
+                                        failures.add("${name}: missing accessor field ${targetName}.${args.value} ${fieldType}")
+                                    }
+                                } else if (hook.desc.endsWith('/Invoker;')) {
+                                    if (!hierarchy.any { it.methods.any { m -> m.name == args.value && m.desc == method.desc } }) {
+                                        failures.add("${name}: missing invoker ${targetName}.${args.value}${method.desc}")
+                                    }
+                                } else if (hook.desc.endsWith('/Inject;') || hook.desc.endsWith('/Redirect;') || hook.desc.endsWith('/ModifyVariable;') || hook.desc.endsWith('/WrapMethod;')) {
+                                    def selectors = args.method ?: []
+                                    def methods = hierarchy.collectMany { it.methods }.findAll { candidate ->
+                                        selectors.any { selector -> selector == candidate.name || selector == candidate.name + candidate.desc }
+                                    }
+                                    int required = args.containsKey('require') ? args.require : (config.injectors?.defaultRequire ?: 1)
+                                    if (required > 0 && methods.empty) { failures.add("${name}: missing methods ${selectors} on ${targetName}") }
+                                    def ats = args.at instanceof List ? args.at : [args.at]
+                                    ats.findAll { it != null }.each { at ->
+                                        def location = values(at)
+                                        if (location.value == 'INVOKE' && location.target && required > 0) {
+                                            def match = location.target =~ /^L([^;]+);([^\(]+)(\(.*)$/
+                                            if (match.matches()) {
+                                                int calls = methods.sum { m -> m.instructions.toArray().count { instruction ->
+                                                    instruction instanceof MethodInsnNode && instruction.owner == match[0][1]
+                                                            && instruction.name == match[0][2] && instruction.desc == match[0][3]
+                                                } } ?: 0
+                                                if (calls < required) { failures.add("${name}: ${location.target} occurs ${calls} times, requires ${required}") }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        logger.lifecycle('Checked {} -> {}', name, targetName)
+                    }
+                }
+            }
+            if (checked == 0) { throw new GradleException('No mixin targets found in supplied JARs') }
+            if (!failures.empty) { throw new GradleException(failures.join('\n')) }
+            logger.lifecycle('Real-JAR contracts checked: {} mixin targets. Runtime mixin application still requires Minecraft.', checked)
+        } finally { jars.each { it.close() } }
+    }
+}

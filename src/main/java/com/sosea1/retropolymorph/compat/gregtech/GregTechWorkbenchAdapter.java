@@ -20,7 +20,7 @@ public final class GregTechWorkbenchAdapter implements RecipeSelectionAdapter {
         GregTechWorkbenchReflection.Binding binding =
                 GregTechWorkbenchReflection.bind(container);
         if (binding == null) {
-            return AdapterDetectionResult.miss();
+            return AdapterDetectionResult.blockFallback();
         }
 
         return AdapterDetectionResult.match(

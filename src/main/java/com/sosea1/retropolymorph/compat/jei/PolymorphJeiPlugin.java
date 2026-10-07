@@ -9,6 +9,9 @@ public final class PolymorphJeiPlugin implements IModPlugin {
 
     @Override
     public void register(IModRegistry registry) {
+        if (!com.sosea1.retropolymorph.config.PolymorphConfig.isIntegrationJeiEnabled()) {
+            return;
+        }
         registry.addAdvancedGuiHandlers(new PolymorphAdvancedGuiHandler());
     }
 }
