@@ -29,6 +29,7 @@ public abstract class RFToolsCraftingRecipeMixin implements RFToolsRecipeSelecti
     @Shadow private IRecipe recipe;
     @Shadow public abstract IRecipe getCachedRecipe(World world);
     @Unique private ResourceLocation retropolymorph$selected;
+    @Unique private boolean retropolymorph$refreshResultAfterFallback;
     @Unique private static final String RETROPOLYMORPH_TAG = "RetroPolymorphRecipe";
 
     public ItemStack retropolymorph$getOutput() { return this.result; }
@@ -45,17 +46,27 @@ public abstract class RFToolsCraftingRecipeMixin implements RFToolsRecipeSelecti
 
     @Inject(method = "getCachedRecipe", at = @At("HEAD"), cancellable = true, require = 1)
     private void retropolymorph$resolveSelected(World world, CallbackInfoReturnable<IRecipe> cir) {
+        this.retropolymorph$refreshResultAfterFallback = false;
         if (this.retropolymorph$selected == null) { return; }
         IRecipe selected = RFToolsPreviewSelection.resolve(this.retropolymorph$selected, this.inv, world);
         if (selected == null) {
             this.retropolymorph$selected = null;
             this.recipe = null;
             this.recipePresent = false;
+            this.retropolymorph$refreshResultAfterFallback = true;
             return;
         }
         this.recipe = selected;
         this.recipePresent = true;
         cir.setReturnValue(selected);
+    }
+
+    @Inject(method = "getCachedRecipe", at = @At("RETURN"), require = 1)
+    private void retropolymorph$refreshFallbackResult(World world, CallbackInfoReturnable<IRecipe> cir) {
+        if (!this.retropolymorph$refreshResultAfterFallback) { return; }
+        this.retropolymorph$refreshResultAfterFallback = false;
+        IRecipe resolved = cir.getReturnValue();
+        this.result = resolved == null ? ItemStack.EMPTY : RecipeProbe.craftingResult(resolved, this.inv);
     }
 
     @Inject(method = "setRecipe", at = @At("HEAD"), require = 1)
